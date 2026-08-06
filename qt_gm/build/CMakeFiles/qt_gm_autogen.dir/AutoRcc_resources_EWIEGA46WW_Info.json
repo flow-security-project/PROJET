@@ -1,0 +1,20 @@
+{
+	"BUILD_DIR" : "/home/mit/I_PLUS_PLUS/Flow_Security/qt_gm/build/qt_gm_autogen",
+	"CMAKE_BINARY_DIR" : "/home/mit/I_PLUS_PLUS/Flow_Security/qt_gm/build",
+	"CMAKE_CURRENT_BINARY_DIR" : "/home/mit/I_PLUS_PLUS/Flow_Security/qt_gm/build",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/home/mit/I_PLUS_PLUS/Flow_Security/qt_gm",
+	"CMAKE_SOURCE_DIR" : "/home/mit/I_PLUS_PLUS/Flow_Security/qt_gm",
+	"GENERATOR" : "Unix Makefiles",
+	"INCLUDE_DIR" : "/home/mit/I_PLUS_PLUS/Flow_Security/qt_gm/build/qt_gm_autogen/include",
+	"INPUTS" : [ "/home/mit/I_PLUS_PLUS/Flow_Security/qt_gm/resources/charte.qss" ],
+	"LOCK_FILE" : "/home/mit/I_PLUS_PLUS/Flow_Security/qt_gm/build/CMakeFiles/qt_gm_autogen.dir/AutoRcc_resources_EWIEGA46WW_Lock.lock",
+	"MULTI_CONFIG" : false,
+	"OPTIONS" : [ "-name", "resources" ],
+	"OUTPUT_CHECKSUM" : "EWIEGA46WW",
+	"OUTPUT_NAME" : "qrc_resources.cpp",
+	"RCC_EXECUTABLE" : "/usr/lib/qt6/libexec/rcc",
+	"RCC_LIST_OPTIONS" : [ "--list" ],
+	"SETTINGS_FILE" : "/home/mit/I_PLUS_PLUS/Flow_Security/qt_gm/build/CMakeFiles/qt_gm_autogen.dir/AutoRcc_resources_EWIEGA46WW_Used.txt",
+	"SOURCE" : "/home/mit/I_PLUS_PLUS/Flow_Security/qt_gm/resources.qrc",
+	"VERBOSITY" : 0
+}
