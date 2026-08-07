@@ -9,6 +9,7 @@
 class QGridLayout;
 class QLabel;
 class QProgressBar;
+class QFrame;
 
 class SalleGrid : public QWidget
 {
@@ -33,6 +34,8 @@ protected:
 private:
     struct Carte {
         QWidget* widget = nullptr;
+        QFrame* accent = nullptr;
+        QLabel* led = nullptr;
         QLabel* titre = nullptr;
         QLabel* identifiant = nullptr;
         QLabel* statut = nullptr;

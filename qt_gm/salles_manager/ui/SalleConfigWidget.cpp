@@ -17,8 +17,10 @@
 SalleConfigWidget::SalleConfigWidget(QWidget* parent)
     : QWidget(parent)
 {
+    setObjectName(QStringLiteral("configRoot"));
+    setAttribute(Qt::WA_StyledBackground, true);
     m_titre = new QLabel(this);
-    m_titre->setStyleSheet(QStringLiteral("font-size:16px;font-weight:700;color:#222222;"));
+    m_titre->setObjectName(QStringLiteral("configTitle"));
 
     m_id = new QLineEdit(this);
     m_id->setPlaceholderText(QStringLiteral("Ex. B204"));
@@ -55,6 +57,7 @@ SalleConfigWidget::SalleConfigWidget(QWidget* parent)
     form->addRow(QString(), m_boutonMesure);
 
     auto* configuration = new QGroupBox(QStringLiteral("Création et configuration"), this);
+    configuration->setObjectName(QStringLiteral("configCard"));
     auto* configurationLayout = new QVBoxLayout(configuration);
     configurationLayout->setContentsMargins(10, 12, 10, 10);
     configurationLayout->addLayout(form);
@@ -73,6 +76,7 @@ SalleConfigWidget::SalleConfigWidget(QWidget* parent)
     configurationLayout->addWidget(m_retour);
 
     auto* actions = new QGroupBox(QStringLiteral("Actions de la salle"), this);
+    actions->setObjectName(QStringLiteral("actionCard"));
     auto* actionsLayout = new QVBoxLayout(actions);
     actionsLayout->setContentsMargins(10, 12, 10, 10);
     actionsLayout->addWidget(m_boutonNouveau);
@@ -84,6 +88,7 @@ SalleConfigWidget::SalleConfigWidget(QWidget* parent)
     m_sallesMasquees->setPlaceholderText(QStringLiteral("Aucune salle masquée"));
     m_boutonRestaurer = new QPushButton(QStringLiteral("Réafficher la carte"), this);
     auto* restauration = new QGroupBox(QStringLiteral("Cartes masquées"), this);
+    restauration->setObjectName(QStringLiteral("restoreCard"));
     auto* restaurationLayout = new QVBoxLayout(restauration);
     restaurationLayout->setContentsMargins(10, 12, 10, 10);
     restaurationLayout->addWidget(m_sallesMasquees);

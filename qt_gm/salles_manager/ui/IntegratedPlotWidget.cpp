@@ -8,6 +8,7 @@
 IntegratedPlotWidget::IntegratedPlotWidget(QWidget* parent)
     : QWidget(parent)
 {
+    setAttribute(Qt::WA_StyledBackground, true);
     m_plot = new QCustomPlot(this);
     m_plot->setMinimumHeight(260);
 

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <utility>
 
+#include <QColor>
 #include <QEvent>
 #include <QFrame>
 #include <QGridLayout>
@@ -18,9 +19,9 @@ SalleGrid::SalleGrid(QWidget* parent)
     : QWidget(parent)
 {
     m_layout = new QGridLayout(this);
-    m_layout->setContentsMargins(10, 10, 10, 10);
-    m_layout->setHorizontalSpacing(12);
-    m_layout->setVerticalSpacing(12);
+    m_layout->setContentsMargins(16, 16, 16, 16);
+    m_layout->setHorizontalSpacing(16);
+    m_layout->setVerticalSpacing(16);
     setObjectName(QStringLiteral("salleGrid"));
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 }
@@ -101,12 +102,15 @@ void SalleGrid::construireCarte(const QString& id)
     auto* card = new QFrame(this);
     card->setObjectName(QStringLiteral("salleCard"));
     card->setProperty("salleId", id);
-    card->setMinimumSize(290, 185);
-    card->setMaximumSize(420, 215);
+    card->setMinimumSize(300, 200);
+    card->setMaximumSize(440, 240);
     card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     card->setCursor(Qt::PointingHandCursor);
 
-    // --- En-tête ---
+    // --- En-tête : LED + nom + badge statut ---
+    auto* led = new QLabel(card);
+    led->setObjectName(QStringLiteral("cardLed"));
+
     auto* title = new QLabel(card);
     title->setObjectName(QStringLiteral("cardTitle"));
 
@@ -118,7 +122,8 @@ void SalleGrid::construireCarte(const QString& id)
 
     auto* headerLayout = new QHBoxLayout;
     headerLayout->setContentsMargins(0, 0, 0, 0);
-    headerLayout->setSpacing(6);
+    headerLayout->setSpacing(8);
+    headerLayout->addWidget(led);
     headerLayout->addWidget(title);
     headerLayout->addWidget(identifiant);
     headerLayout->addStretch();
@@ -129,10 +134,10 @@ void SalleGrid::construireCarte(const QString& id)
     occupation->setObjectName(QStringLiteral("cardOccupancyNum"));
 
     auto* pourcentage = new QLabel(card);
-    pourcentage->setObjectName(QStringLiteral("cardPercentBadge"));
+    pourcentage->setObjectName(QStringLiteral("cardPercent"));
 
     auto* occLayout = new QHBoxLayout;
-    occLayout->setContentsMargins(0, 2, 0, 0);
+    occLayout->setContentsMargins(0, 8, 0, 0);
     occLayout->addWidget(occupation);
     occLayout->addStretch();
     occLayout->addWidget(pourcentage);
@@ -144,19 +149,22 @@ void SalleGrid::construireCarte(const QString& id)
     barre->setFixedHeight(8);
     barre->setRange(0, 100);
 
-    // --- Zone inférieure de détails ---
-    auto* flux = new QLabel(card);
+    // --- Zone inférieure de détails (pied de carte) ---
+    auto* footer = new QFrame(card);
+    footer->setObjectName(QStringLiteral("cardFooter"));
+
+    auto* flux = new QLabel(footer);
     flux->setObjectName(QStringLiteral("cardMetric"));
 
-    auto* details = new QLabel(card);
+    auto* details = new QLabel(footer);
     details->setObjectName(QStringLiteral("cardMetric"));
 
-    auto* hauteur = new QLabel(card);
+    auto* hauteur = new QLabel(footer);
     hauteur->setObjectName(QStringLiteral("cardMetricSub"));
 
-    auto* bottomLayout = new QVBoxLayout;
-    bottomLayout->setContentsMargins(0, 4, 0, 0);
-    bottomLayout->setSpacing(2);
+    auto* footerLayout = new QVBoxLayout(footer);
+    footerLayout->setContentsMargins(12, 10, 12, 10);
+    footerLayout->setSpacing(5);
 
     auto* infoRow1 = new QHBoxLayout;
     infoRow1->setContentsMargins(0, 0, 0, 0);
@@ -164,21 +172,34 @@ void SalleGrid::construireCarte(const QString& id)
     infoRow1->addStretch();
     infoRow1->addWidget(details);
 
-    bottomLayout->addLayout(infoRow1);
-    bottomLayout->addWidget(hauteur);
+    footerLayout->addLayout(infoRow1);
+    footerLayout->addWidget(hauteur);
 
-    // --- Layout principal de la carte ---
-    auto* layout = new QVBoxLayout(card);
-    layout->setContentsMargins(14, 12, 14, 12);
-    layout->setSpacing(6);
+    // --- Layout principal de la carte : liseré d'identité + corps ---
+    auto* accent = new QFrame(card);
+    accent->setObjectName(QStringLiteral("cardAccent"));
+    accent->setFixedWidth(8);
+
+    auto* body = new QWidget(card);
+    body->setObjectName(QStringLiteral("cardBody"));
+
+    auto* layout = new QVBoxLayout(body);
+    layout->setContentsMargins(16, 14, 16, 14);
+    layout->setSpacing(10);
     layout->addLayout(headerLayout);
     layout->addLayout(occLayout);
     layout->addWidget(barre);
-    layout->addLayout(bottomLayout);
+    layout->addWidget(footer);
 
-    const QList<QWidget*> clickable = {card, title, identifiant, status,
-                                       occupation, pourcentage, barre,
-                                       flux, details, hauteur};
+    auto* rootLayout = new QHBoxLayout(card);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
+    rootLayout->setSpacing(0);
+    rootLayout->addWidget(accent);
+    rootLayout->addWidget(body, 1);
+
+    const QList<QWidget*> clickable = {card, accent, body, led, title, identifiant,
+                                       status, occupation, pourcentage, barre,
+                                       footer, flux, details, hauteur};
     for (QWidget* widget : clickable) {
         widget->setProperty("salleId", id);
         widget->installEventFilter(this);
@@ -186,6 +207,8 @@ void SalleGrid::construireCarte(const QString& id)
 
     Carte carte;
     carte.widget = card;
+    carte.accent = accent;
+    carte.led = led;
     carte.titre = title;
     carte.identifiant = identifiant;
     carte.statut = status;
@@ -206,6 +229,29 @@ void SalleGrid::mettreAJourCarte(const QString& id)
 
     const Salle& salle = m_salles[id];
     Carte& carte = m_cartes[id];
+
+    static const QStringList palette = {
+        QStringLiteral("#1565C0"), // bleu
+        QStringLiteral("#00897B"), // sarcelle
+        QStringLiteral("#5E35B1"), // violet
+        QStringLiteral("#D81B60"), // framboise
+        QStringLiteral("#3949AB"), // indigo
+        QStringLiteral("#00838F"), // cyan foncé
+        QStringLiteral("#6D4C41"), // brun
+        QStringLiteral("#546E7A"), // bleu-gris
+    };
+    QColor base;
+    if (salle.enAttente)
+        base = QColor(QStringLiteral("#6366F1"));
+    else if (!salle.enLigne)
+        base = QColor(QStringLiteral("#94A3B8"));
+    else
+        base = QColor(palette[qHash(salle.id) % palette.size()]);
+    carte.accent->setStyleSheet(
+        QStringLiteral("background:qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+                       "stop:0 %1, stop:1 %2); border:none; "
+                       "border-top-left-radius:8px; border-bottom-left-radius:8px;")
+            .arg(base.lighter(125).name(), base.darker(115).name()));
 
     carte.titre->setText(salle.nom.isEmpty() ? salle.id : salle.nom);
     carte.identifiant->setText(QStringLiteral("[%1]").arg(salle.id));
@@ -243,11 +289,15 @@ void SalleGrid::mettreAJourCarte(const QString& id)
     carte.statut->style()->unpolish(carte.statut);
     carte.statut->style()->polish(carte.statut);
 
-    carte.occupation->setText(salle.occupation < 0 
-        ? QStringLiteral("-- / %1 pers.").arg(salle.capacite)
-        : QStringLiteral("%1 / %2 pers.").arg(salle.occupation).arg(salle.capacite));
+    carte.led->setProperty("level", level);
+    carte.led->style()->unpolish(carte.led);
+    carte.led->style()->polish(carte.led);
 
-    carte.pourcentage->setText(salle.occupation < 0 ? QStringLiteral("--%") : QStringLiteral("%1%").arg(pct));
+    carte.occupation->setText(salle.occupation < 0 
+        ? QStringLiteral("-- / %1").arg(salle.capacite)
+        : QStringLiteral("%1 / %2").arg(salle.occupation).arg(salle.capacite));
+
+    carte.pourcentage->setText(salle.occupation < 0 ? QStringLiteral("-- %") : QStringLiteral("%1 %").arg(pct));
     carte.pourcentage->setProperty("level", level);
     carte.pourcentage->style()->unpolish(carte.pourcentage);
     carte.pourcentage->style()->polish(carte.pourcentage);
@@ -257,10 +307,10 @@ void SalleGrid::mettreAJourCarte(const QString& id)
     carte.barre->style()->unpolish(carte.barre);
     carte.barre->style()->polish(carte.barre);
 
-    carte.flux->setText(QStringLiteral("Entrées : %1   Sorties : %2").arg(salle.nbEntrees).arg(salle.nbSorties));
-    carte.details->setText(QStringLiteral("Densité: %1").arg(salle.densite, 0, 'f', 2));
+    carte.flux->setText(QStringLiteral("Entrées : %1    Sorties : %2").arg(salle.nbEntrees).arg(salle.nbSorties));
+    carte.details->setText(QStringLiteral("Densité : %1").arg(salle.densite, 0, 'f', 2));
 
-    carte.hauteur->setText(QStringLiteral("Porte: %1  |  %2 - %3")
+    carte.hauteur->setText(QStringLiteral("Porte : %1    |    %2 - %3")
         .arg(salle.hauteurPorteMesuree 
             ? QStringLiteral("%1 cm").arg(salle.hauteurPorteCm, 0, 'f', 1) 
             : QStringLiteral("non mesurée"))
@@ -275,7 +325,7 @@ void SalleGrid::mettreAJourCarte(const QString& id)
 void SalleGrid::reflow()
 {
     const int cardWidth = 310;
-    const int columns = qMax(1, (width() - 20) / (cardWidth + 12));
+    const int columns = qMax(1, (width() - 20) / (cardWidth + 16));
 
     QStringList sortedIds = m_cartes.keys();
     std::sort(sortedIds.begin(), sortedIds.end());

@@ -19,6 +19,7 @@ SallesWidget::SallesWidget(QWidget* parent)
     : QWidget(parent)
 {
     setObjectName(QStringLiteral("sallesRoot"));
+    setAttribute(Qt::WA_StyledBackground, true);
     m_status = new QLabel(this);
     m_status->setObjectName(QStringLiteral("statusLabel"));
     m_status->setText(QStringLiteral("Aucune source active"));
@@ -27,9 +28,13 @@ SallesWidget::SallesWidget(QWidget* parent)
     m_config = new SalleConfigWidget(this);
 
     auto* left = new QWidget(this);
+    left->setObjectName(QStringLiteral("sallesLeft"));
+    left->setAttribute(Qt::WA_StyledBackground, true);
     auto* leftLayout = new QVBoxLayout(left);
     leftLayout->setContentsMargins(0, 0, 0, 0);
-    leftLayout->addWidget(new QLabel(QStringLiteral("Vue globale des salles"), left));
+    auto* titreGlobal = new QLabel(QStringLiteral("Vue globale des salles"), left);
+    titreGlobal->setObjectName(QStringLiteral("pageTitle"));
+    leftLayout->addWidget(titreGlobal);
 
     auto* scroll = new QScrollArea(left);
     scroll->setObjectName(QStringLiteral("sallesScroll"));

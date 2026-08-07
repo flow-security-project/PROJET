@@ -6,6 +6,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QStyle>
 #include <QVBoxLayout>
 
 #include "data/DataSource.h"
@@ -15,16 +16,14 @@ namespace {
 QLabel* kpiLabel(const QString& title, QWidget* parent)
 {
     auto* label = new QLabel(title, parent);
-    label->setStyleSheet(QStringLiteral("font-size:10px;font-weight:700;color:#777777;"));
+    label->setObjectName(QStringLiteral("kpiTitle"));
     return label;
 }
 
 QGroupBox* kpiBox(QWidget* parent)
 {
     auto* box = new QGroupBox(parent);
-    box->setStyleSheet(
-        QStringLiteral("QGroupBox{background:#FFFFFF;border:1px solid #D8D8D8;"
-                       "border-radius:2px;margin-top:8px;padding:8px;}"));
+    box->setObjectName(QStringLiteral("kpiCard"));
     return box;
 }
 }
@@ -35,9 +34,12 @@ SalleDetailWidget::SalleDetailWidget(DataSource* source, const QString& salleId,
     , m_source(source)
     , m_salleId(salleId)
 {
+    setObjectName(QStringLiteral("detailRoot"));
+    setAttribute(Qt::WA_StyledBackground, true);
     m_titre = new QLabel(this);
-    m_titre->setStyleSheet(QStringLiteral("font-size:18px;font-weight:700;color:#222222;"));
+    m_titre->setObjectName(QStringLiteral("detailTitle"));
     m_statut = new QLabel(this);
+    m_statut->setObjectName(QStringLiteral("detailStatusBadge"));
 
     auto* heading = new QHBoxLayout;
     heading->addWidget(m_titre);
@@ -47,37 +49,37 @@ SalleDetailWidget::SalleDetailWidget(DataSource* source, const QString& salleId,
     auto* kpis = new QGridLayout;
     kpis->setSpacing(8);
 
-    auto makeKpi = [this, kpis](const QString& title, QLabel*& value,
-                                int row, int column, const QString& color) {
+    auto makeKpi = [this, kpis](const QString& title, const QString& kpiType, QLabel*& value,
+                                int row, int column) {
         auto* box = kpiBox(this);
         auto* layout = new QVBoxLayout(box);
-        layout->setContentsMargins(10, 8, 10, 8);
+        layout->setContentsMargins(12, 10, 12, 10);
         layout->addWidget(kpiLabel(title, box));
         value = new QLabel(QStringLiteral("—"), box);
-        value->setStyleSheet(QStringLiteral("font-size:20px;font-weight:700;color:%1;")
-                                  .arg(color));
+        value->setObjectName(QStringLiteral("kpiValue"));
+        value->setProperty("kpiType", kpiType);
         layout->addWidget(value);
         kpis->addWidget(box, row, column);
     };
-    makeKpi(QStringLiteral("OCCUPATION"), m_occupation, 0, 0, QStringLiteral("#222222"));
-    makeKpi(QStringLiteral("TAUX"), m_taux, 0, 1, QStringLiteral("#1976D2"));
-    makeKpi(QStringLiteral("DÉBIT"), m_debit, 0, 2, QStringLiteral("#1976D2"));
-    makeKpi(QStringLiteral("ENTRÉES"), m_entrees, 0, 3, QStringLiteral("#2E7D32"));
-    makeKpi(QStringLiteral("SORTIES"), m_sorties, 0, 4, QStringLiteral("#F57C00"));
+    makeKpi(QStringLiteral("OCCUPATION"), QStringLiteral("occupation"), m_occupation, 0, 0);
+    makeKpi(QStringLiteral("TAUX"), QStringLiteral("taux"), m_taux, 0, 1);
+    makeKpi(QStringLiteral("DÉBIT"), QStringLiteral("debit"), m_debit, 0, 2);
+    makeKpi(QStringLiteral("ENTRÉES"), QStringLiteral("entrees"), m_entrees, 0, 3);
+    makeKpi(QStringLiteral("SORTIES"), QStringLiteral("sorties"), m_sorties, 0, 4);
 
     m_infos = new QLabel(this);
-    m_infos->setStyleSheet(QStringLiteral("font-size:11px;color:#555555;"));
+    m_infos->setObjectName(QStringLiteral("detailInfos"));
 
     auto* controls = new QHBoxLayout;
     auto* occupation = new QCheckBox(QStringLiteral("Occupation (#4A90D9)"), this);
     auto* entrees = new QCheckBox(QStringLiteral("Entrées (#2E7D32)"), this);
     auto* sorties = new QCheckBox(QStringLiteral("Sorties (#F57C00)"), this);
+    occupation->setObjectName(QStringLiteral("checkOccupation"));
+    entrees->setObjectName(QStringLiteral("checkEntrees"));
+    sorties->setObjectName(QStringLiteral("checkSorties"));
     occupation->setChecked(true);
     entrees->setChecked(true);
     sorties->setChecked(true);
-    occupation->setStyleSheet(QStringLiteral("color:#4A90D9;font-weight:600;"));
-    entrees->setStyleSheet(QStringLiteral("color:#2E7D32;font-weight:600;"));
-    sorties->setStyleSheet(QStringLiteral("color:#F57C00;font-weight:600;"));
     controls->addWidget(occupation);
     controls->addWidget(entrees);
     controls->addWidget(sorties);
@@ -86,6 +88,7 @@ SalleDetailWidget::SalleDetailWidget(DataSource* source, const QString& salleId,
     controls->addWidget(pause);
 
     m_plot = new IntegratedPlotWidget(this);
+    m_plot->setObjectName(QStringLiteral("plotCard"));
     connect(occupation, &QCheckBox::toggled, m_plot,
             [this](bool visible) { m_plot->setGraphVisible(0, visible); });
     connect(entrees, &QCheckBox::toggled, m_plot,
@@ -135,11 +138,13 @@ void SalleDetailWidget::afficher(const Salle& salle)
 {
     m_titre->setText(salle.nom.isEmpty() ? salle.id
                                         : QStringLiteral("%1 (%2)").arg(salle.nom, salle.id));
-    const QString statusColor = salle.enAttente ? QStringLiteral("#F57C00")
-                                                : salle.enLigne ? QStringLiteral("#2E7D32")
-                                                                : QStringLiteral("#C62828");
+    const QString level = salle.enAttente ? QStringLiteral("pending")
+                                         : salle.enLigne ? QStringLiteral("normal")
+                                                         : QStringLiteral("critical");
     m_statut->setText(salle.statutTexte());
-    m_statut->setStyleSheet(QStringLiteral("color:%1;font-weight:700;").arg(statusColor));
+    m_statut->setProperty("level", level);
+    m_statut->style()->unpolish(m_statut);
+    m_statut->style()->polish(m_statut);
     m_occupation->setText(QStringLiteral("%1").arg(salle.occupationTexte()));
     m_taux->setText(QStringLiteral("%1 %").arg(int(salle.taux() * 100.0)));
     m_debit->setText(QStringLiteral("%1 pers/min").arg(debitInstantane(salle), 0, 'f', 1));
