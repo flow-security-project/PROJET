@@ -14,6 +14,8 @@ qt_add_executable(salles_manager
     resources.qrc
 
     models/Salle.h
+    models/Alerte.h
+    models/AlerteModel.h
 
     data/DataSource.h
     data/DataSource.cpp
@@ -28,10 +30,14 @@ qt_add_executable(salles_manager
     ../vendor/qcustomplot.cpp
     ui/IntegratedPlotWidget.h
     ui/IntegratedPlotWidget.cpp
+    ui/JaugeSaturation.h
+    ui/JaugeSaturation.cpp
     ui/SalleDetailWidget.h
     ui/SalleDetailWidget.cpp
     ui/SalleGrid.h
     ui/SalleGrid.cpp
+    ui/AlertePanelWidget.h
+    ui/AlertePanelWidget.cpp
     ui/SalleConfigWidget.h
     ui/SalleConfigWidget.cpp
     ui/SallesWidget.h

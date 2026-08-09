@@ -70,6 +70,20 @@ bool SalleGrid::restaurerSalle(const QString& id)
     return m_cartes.contains(id);
 }
 
+void SalleGrid::supprimerSalle(const QString& id)
+{
+    m_salles.remove(id);
+    m_masquees.remove(id);
+    if (m_cartes.contains(id)) {
+        const Carte carte = m_cartes.take(id);
+        m_layout->removeWidget(carte.widget);
+        delete carte.widget;
+    }
+    if (m_selection == id)
+        m_selection.clear();
+    reflow();
+}
+
 QStringList SalleGrid::sallesMasquees() const
 {
     return m_masquees.values();
@@ -230,23 +244,24 @@ void SalleGrid::mettreAJourCarte(const QString& id)
     const Salle& salle = m_salles[id];
     Carte& carte = m_cartes[id];
 
-    static const QStringList palette = {
-        QStringLiteral("#1565C0"), // bleu
-        QStringLiteral("#00897B"), // sarcelle
-        QStringLiteral("#5E35B1"), // violet
-        QStringLiteral("#D81B60"), // framboise
-        QStringLiteral("#3949AB"), // indigo
-        QStringLiteral("#00838F"), // cyan foncé
-        QStringLiteral("#6D4C41"), // brun
-        QStringLiteral("#546E7A"), // bleu-gris
-    };
     QColor base;
-    if (salle.enAttente)
+    if (salle.enAttente) {
         base = QColor(QStringLiteral("#6366F1"));
-    else if (!salle.enLigne)
+    } else if (!salle.enLigne) {
         base = QColor(QStringLiteral("#94A3B8"));
-    else
-        base = QColor(palette[qHash(salle.id) % palette.size()]);
+    } else if (salle.evacuationActive) {
+        base = QColor(QStringLiteral("#B91C1C"));
+    } else {
+        const double t = salle.taux();
+        if (t >= 0.95)
+            base = QColor(QStringLiteral("#DC2626"));
+        else if (t >= 0.80)
+            base = QColor(QStringLiteral("#EF6C00"));
+        else if (t >= 0.60)
+            base = QColor(QStringLiteral("#D97706"));
+        else
+            base = QColor(QStringLiteral("#059669"));
+    }
     carte.accent->setStyleSheet(
         QStringLiteral("background:qlineargradient(x1:0, y1:0, x2:0, y2:1, "
                        "stop:0 %1, stop:1 %2); border:none; "
@@ -346,4 +361,12 @@ void SalleGrid::setSelection(const QString& id)
     m_selection = id;
     for (const QString& cardId : m_cartes.keys())
         mettreAJourCarte(cardId);
+}
+
+void SalleGrid::selectionnerSalle(const QString& id)
+{
+    if (!m_cartes.contains(id))
+        return;
+    setSelection(id);
+    emit salleSelectionnee(id);
 }

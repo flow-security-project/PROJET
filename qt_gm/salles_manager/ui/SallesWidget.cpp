@@ -5,12 +5,15 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMessageBox>
 #include <QScrollArea>
 #include <QSplitter>
 #include <QTime>
 #include <QVBoxLayout>
 
 #include "data/DataSource.h"
+#include "models/AlerteModel.h"
+#include "ui/AlertePanelWidget.h"
 #include "ui/SalleConfigWidget.h"
 #include "ui/SalleDetailWidget.h"
 #include "ui/SalleGrid.h"
@@ -26,6 +29,8 @@ SallesWidget::SallesWidget(QWidget* parent)
 
     m_grid = new SalleGrid(this);
     m_config = new SalleConfigWidget(this);
+    m_modeleAlertes = new AlerteModel(this);
+    m_panelAlertes = new AlertePanelWidget(m_modeleAlertes, this);
 
     auto* left = new QWidget(this);
     left->setObjectName(QStringLiteral("sallesLeft"));
@@ -52,11 +57,18 @@ SallesWidget::SallesWidget(QWidget* parent)
     splitter->setStretchFactor(1, 1);
     splitter->setSizes({760, 360});
 
+    auto* splitterVertical = new QSplitter(Qt::Vertical, this);
+    splitterVertical->addWidget(splitter);
+    splitterVertical->addWidget(m_panelAlertes);
+    splitterVertical->setStretchFactor(0, 4);
+    splitterVertical->setStretchFactor(1, 1);
+    splitterVertical->setSizes({560, 190});
+
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(10, 8, 10, 10);
     layout->setSpacing(5);
     layout->addWidget(m_status);
-    layout->addWidget(splitter, 1);
+    layout->addWidget(splitterVertical, 1);
 
     connect(m_grid, &SalleGrid::salleSelectionnee,
             this, &SallesWidget::onSalleSelectionnee);
@@ -70,10 +82,14 @@ SallesWidget::SallesWidget(QWidget* parent)
             this, &SallesWidget::onActualisationDemandee);
     connect(m_config, &SalleConfigWidget::masquageDemande,
             this, &SallesWidget::onMasquageDemande);
+    connect(m_config, &SalleConfigWidget::suppressionDemandee,
+            this, &SallesWidget::onSuppressionDemande);
     connect(m_config, &SalleConfigWidget::restaurationDemandee,
             this, &SallesWidget::onRestaurationDemandee);
     connect(m_config, &SalleConfigWidget::courbeDemandee,
             this, &SallesWidget::onCourbeDemandee);
+    connect(m_panelAlertes, &AlertePanelWidget::voirDetailAlerte,
+            this, &SallesWidget::onVoirDetailAlerte);
     connect(m_config, &SalleConfigWidget::nouvelleDemandee,
             this, [this]() {
                 m_selectionId.clear();
@@ -124,6 +140,8 @@ void SallesWidget::onSalleMiseAJour(const QString& id)
     const Salle salle = m_source->salles().value(id);
     m_grid->majSalle(salle);
     actualiserListeMasquees();
+    if (id == m_selectionId)
+        m_config->afficherStatutReseau(salle);
     emit statutChanged(QStringLiteral("Données actualisées — %1").arg(id));
 }
 
@@ -175,6 +193,44 @@ void SallesWidget::onMasquageDemande(const QString& id)
     emit statutChanged(QStringLiteral("Carte masquée — %1 reste conservée").arg(id));
 }
 
+void SallesWidget::onSuppressionDemande(const QString& id)
+{
+    if (id.isEmpty() || !m_source || !m_source->salles().contains(id))
+        return;
+
+    const Salle salle = m_source->salles().value(id);
+    const QString libelle = salle.nom.isEmpty() ? id
+                                                : QStringLiteral("%1 (%2)")
+                                                      .arg(salle.nom, id);
+    const auto reponse = QMessageBox::question(
+        this, QStringLiteral("Supprimer la salle"),
+        QStringLiteral("Supprimer définitivement la salle %1 ?\n"
+                       "La carte sera retirée et les données locales "
+                       "de la salle seront effacées.")
+            .arg(libelle),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (reponse != QMessageBox::Yes)
+        return;
+
+    m_source->supprimerSalle(id);
+}
+
+void SallesWidget::onSalleSupprimee(const QString& id)
+{
+    m_grid->supprimerSalle(id);
+    actualiserListeMasquees();
+    if (m_detailDialog && m_detailSalleId == id) {
+        m_detailDialog->close();
+        m_detailDialog = nullptr;
+        m_detailSalleId.clear();
+    }
+    if (m_selectionId == id) {
+        m_selectionId.clear();
+        m_config->afficherCreation();
+    }
+    emit statutChanged(QStringLiteral("Salle supprimée — %1").arg(id));
+}
+
 void SallesWidget::onRestaurationDemandee(const QString& id)
 {
     if (id.isEmpty()) {
@@ -214,7 +270,8 @@ void SallesWidget::onCourbeDemandee(const Salle& salle)
                                        .arg(salle.nom.isEmpty() ? salle.id : salle.nom));
     m_detailDialog->resize(980, 700);
 
-    auto* detail = new SalleDetailWidget(m_source, salle.id, m_detailDialog);
+    auto* detail = new SalleDetailWidget(m_source, salle.id, m_modeleAlertes,
+                                         m_detailDialog);
     auto* close = new QDialogButtonBox(QDialogButtonBox::Close, m_detailDialog);
     connect(close, &QDialogButtonBox::rejected,
             m_detailDialog, &QDialog::reject);
@@ -227,6 +284,21 @@ void SallesWidget::onCourbeDemandee(const Salle& salle)
         m_detailSalleId.clear();
     });
     m_detailDialog->show();
+}
+
+void SallesWidget::onAlerte(const Alerte& alerte)
+{
+    m_modeleAlertes->ajouter(alerte);
+    emit statutChanged(QStringLiteral("ALERTE — %1 (%2)")
+                           .arg(alerte.salleId, alerte.typeLibelle()));
+}
+
+void SallesWidget::onVoirDetailAlerte(const QString& salleId, quint64 ts)
+{
+    if (!m_source || !m_source->salles().contains(salleId))
+        return;
+    m_grid->selectionnerSalle(salleId);
+    onCourbeDemandee(m_source->salles().value(salleId));
 }
 
 void SallesWidget::onSourceErreur(const QString& message)
@@ -255,6 +327,8 @@ void SallesWidget::connecterSource(DataSource* source)
 {
     connect(source, &DataSource::salleAjoutee,
             this, &SallesWidget::onSalleAjoutee);
+    connect(source, &DataSource::salleSupprimee,
+            this, &SallesWidget::onSalleSupprimee);
     connect(source, &DataSource::salleMiseAJour,
             this, &SallesWidget::onSalleMiseAJour);
     connect(source, &DataSource::hauteurPorteMesuree,
@@ -263,6 +337,8 @@ void SallesWidget::connecterSource(DataSource* source)
             this, &SallesWidget::onSourceErreur);
     connect(source, &DataSource::logAppend,
             this, &SallesWidget::onSourceLog);
+    connect(source, &DataSource::alerte,
+            this, &SallesWidget::onAlerte);
     connect(source, &DataSource::statutSource, this,
             [this](bool connecte, const QString& note) {
                 m_status->setText(QStringLiteral("Source : %1 — %2")

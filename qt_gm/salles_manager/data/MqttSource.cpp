@@ -2,9 +2,12 @@
 
 #include <algorithm>
 
+#include <QDateTime>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
+
+#include "models/Alerte.h"
 
 MqttSource::MqttSource(QObject* parent)
     : DataSource(parent)
@@ -18,16 +21,21 @@ MqttSource::MqttSource(QObject* parent)
     connect(&m_mesureTimer, &QTimer::timeout,
             this, &MqttSource::onMesureTimeout);
     m_mesureTimer.setSingleShot(true);
+    m_watchdogTimer.setInterval(1000);
+    connect(&m_watchdogTimer, &QTimer::timeout,
+            this, &MqttSource::onWatchdogTimeout);
 }
 
 void MqttSource::start()
 {
+    m_watchdogTimer.start();
     emit statutSource(false, QStringLiteral("Déconnecté"));
     emit logAppend(QStringLiteral("Source MQTT prête — indiquez le broker"));
 }
 
 void MqttSource::stop()
 {
+    m_watchdogTimer.stop();
     m_mesureTimer.stop();
     m_client.disconnectFromHost();
 }
@@ -81,10 +89,29 @@ void MqttSource::modifierSalle(const Salle& salle)
     updated.densHist = previous.densHist;
     updated.entHist = previous.entHist;
     updated.sortHist = previous.sortHist;
+    updated.fluxSortieHist = previous.fluxSortieHist;
+    updated.fluxSortieAnormal = previous.fluxSortieAnormal;
+    updated.derniereAlerteFluxSortieMs = previous.derniereAlerteFluxSortieMs;
     updated.enAttente = true;
     m_salles.insert(updated.id, updated);
     emit salleMiseAJour(updated.id);
     publierConfiguration(updated);
+}
+
+void MqttSource::supprimerSalle(const QString& id)
+{
+    if (!m_salles.contains(id)) {
+        emit erreur(QStringLiteral("Salle inconnue : %1").arg(id));
+        return;
+    }
+
+    m_salles.remove(id);
+    m_departTimes.remove(id);
+    emit salleSupprimee(id);
+    emit logAppend(QStringLiteral("SALLE supprimée du dashboard — %1 "
+                                  "(le nœud reste actif, aucune commande de "
+                                  "désactivation n'est prévue par le firmware)")
+                       .arg(id));
 }
 
 void MqttSource::getHauteurPorte(const QString& salleId)
@@ -197,12 +224,21 @@ void MqttSource::onMessage(const QString& topic, const QByteArray& payload)
     if (suffix == QStringLiteral("heartbeat")) {
         salle.enLigne = object.value(QStringLiteral("etat")).toString()
                         == QStringLiteral("online");
+        salle.dernierHeartbeatMs = QDateTime::currentMSecsSinceEpoch();
+        salle.uptimeS = object.value(QStringLiteral("uptime_s")).toInt(salle.uptimeS);
     } else if (suffix == QStringLiteral("raw/ultrason")) {
         const QString event = object.value(QStringLiteral("event")).toString();
-        if (event == QStringLiteral("presence"))
+        if (event == QStringLiteral("presence")) {
             ++salle.nbEntrees;
-        else if (event == QStringLiteral("depart"))
+            if (salle.occupation >= 0)
+                salle.occupation = qMin(salle.capacite, salle.occupation + 1);
+        } else if (event == QStringLiteral("depart")) {
             ++salle.nbSorties;
+            if (salle.occupation >= 0)
+                salle.occupation = qMax(0, salle.occupation - 1);
+            m_departTimes[id].append(QDateTime::currentMSecsSinceEpoch());
+            verifierFluxSortie(id);
+        }
     } else if (suffix == QStringLiteral("raw/env")) {
         // The current room model keeps the aggregate state; environmental data
         // remains available for the future safety widgets.
@@ -210,8 +246,10 @@ void MqttSource::onMessage(const QString& topic, const QByteArray& payload)
         salle.occupation = object.value(QStringLiteral("occupation")).toInt(-1);
         salle.capacite = object.value(QStringLiteral("capacite")).toInt(salle.capacite);
         salle.densite = object.value(QStringLiteral("densite")).toDouble(salle.densite);
-        salle.enLigne = object.value(QStringLiteral("en_ligne")).toBool(true);
+        if (object.contains(QStringLiteral("en_ligne")))
+            salle.enLigne = object.value(QStringLiteral("en_ligne")).toBool(false);
         salle.enAttente = false;
+        salle.mettreAJourAnticipation();
         salle.pushHistorique();
     } else if (suffix == QStringLiteral("config/confirm")) {
         salle.nom = object.value(QStringLiteral("nom")).toString(salle.nom);
@@ -241,6 +279,32 @@ void MqttSource::onMesureTimeout()
     finaliserMesure(false, QStringLiteral("Aucune mesure ToF valide reçue"));
 }
 
+void MqttSource::onWatchdogTimeout()
+{
+    const qint64 maintenant = QDateTime::currentMSecsSinceEpoch();
+    for (auto it = m_salles.begin(); it != m_salles.end(); ++it) {
+        Salle& salle = it.value();
+        if (salle.enAttente)
+            continue;
+
+        if (salle.enLigne && salle.dernierHeartbeatMs > 0
+            && maintenant - salle.dernierHeartbeatMs > 30000) {
+            salle.enLigne = false;
+            emit salleMiseAJour(salle.id);
+            emit logAppend(QStringLiteral("HORS LIGNE — %1 : aucun heartbeat depuis 30 s")
+                               .arg(salle.id));
+            continue;
+        }
+
+        if (salle.enLigne && salle.occupation >= 0) {
+            salle.mettreAJourAnticipation();
+            salle.pushHistorique();
+            verifierFluxSortie(salle.id);
+            emit salleMiseAJour(salle.id);
+        }
+    }
+}
+
 void MqttSource::finaliserMesure(bool succes, const QString& note)
 {
     const QString id = m_mesureId;
@@ -266,6 +330,40 @@ void MqttSource::finaliserMesure(bool succes, const QString& note)
                              QStringLiteral("%1 cm, médiane de %2 mesures")
                                  .arg(centimetres, 0, 'f', 1)
                                  .arg(mesures.size()));
+}
+
+void MqttSource::verifierFluxSortie(const QString& salleId)
+{
+    if (!m_salles.contains(salleId))
+        return;
+
+    const qint64 maintenant = QDateTime::currentMSecsSinceEpoch();
+    QVector<qint64>& departs = m_departTimes[salleId];
+    while (!departs.isEmpty() && maintenant - departs.first() > 60000)
+        departs.removeFirst();
+
+    const double debit = double(departs.size()); // départs/min glissants
+    Salle& salle = m_salles[salleId];
+    const Salle::DetectionFluxSortie detection
+        = salle.majDetectionFluxSortie(debit, maintenant);
+    if (!detection.alerte)
+        return;
+
+    Alerte a;
+    a.salleId = salle.id;
+    a.salleNom = salle.nom;
+    a.type = QStringLiteral("flux_sortie");
+    a.capteurs = {QStringLiteral("HC-SR04"), QStringLiteral("VL53L0X")};
+    a.detail = QStringLiteral(
+        "Débit sortant %1 pers/min — seuil μ+3σ : %2 "
+        "(μ=%3, σ=%4, fenêtre %5 s)")
+                   .arg(detection.debit, 0, 'f', 0)
+                   .arg(detection.seuil, 0, 'f', 0)
+                   .arg(detection.mu, 0, 'f', 1)
+                   .arg(detection.sigma, 0, 'f', 1)
+                   .arg(detection.points);
+    emit alerte(a);
+    emit logAppend(QStringLiteral("ALERTE F3 — %1 : %2").arg(salle.id, a.detail));
 }
 
 double MqttSource::mediane(QVector<double> valeurs)

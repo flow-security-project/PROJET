@@ -22,6 +22,8 @@ public:
     void viderVue();
     void masquerSalle(const QString& id);
     bool restaurerSalle(const QString& id);
+    void supprimerSalle(const QString& id);
+    void selectionnerSalle(const QString& id);
     QStringList sallesMasquees() const;
 
 signals:

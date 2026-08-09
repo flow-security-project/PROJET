@@ -1,5 +1,5 @@
 <RCC>
     <qresource prefix="/styles">
-        <file>resources/charte.qss</file>
+        <file alias="charte.qss">resources/charte.qss</file>
     </qresource>
 </RCC>

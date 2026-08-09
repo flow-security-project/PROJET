@@ -448,6 +448,60 @@ QLabel#detailInfos {
     padding: 10px 12px;
 }
 
+/* ---------- Anticipation de saturation ---------- */
+QGroupBox#anticipationCard {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+}
+
+QLabel#anticipationValue {
+    font-family: "Roboto Mono", "JetBrains Mono", "Consolas", "Courier New", monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: #0F172A;
+}
+
+QLabel#anticipationValue[niveau="urgent"] { color: #DC2626; }
+QLabel#anticipationValue[niveau="attention"] { color: #D97706; }
+QLabel#anticipationValue[niveau="calme"] { color: #059669; }
+QLabel#anticipationValue[niveau="aucune"] { color: #64748B; }
+
+QLabel#anticipationSub {
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+}
+
+/* ---------- État réseau ---------- */
+QGroupBox#networkCard {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+}
+
+QLabel#networkBadge {
+    font-size: 12px;
+    font-weight: 700;
+    color: #FFFFFF;
+    padding: 5px 12px;
+    border-radius: 12px;
+    background-color: #64748B;
+}
+
+QLabel#networkBadge[level="normal"] { background-color: #10B981; }
+QLabel#networkBadge[level="warning"] { background-color: #F59E0B; }
+QLabel#networkBadge[level="critical"] { background-color: #EF4444; }
+QLabel#networkBadge[level="offline"] { background-color: #94A3B8; }
+QLabel#networkBadge[level="pending"] { background-color: #6366F1; }
+
+QLabel#networkDetail {
+    font-size: 12px;
+    color: #475569;
+}
+
+QCheckBox#checkDensite { color: #7C3AED; }
+
 QWidget#plotCard {
     background: #FFFFFF;
     border: 1px solid #E2E8F0;
@@ -484,6 +538,162 @@ QCheckBox::indicator:checked:hover {
 QCheckBox#checkOccupation { color: #2563EB; }
 QCheckBox#checkEntrees { color: #059669; }
 QCheckBox#checkSorties { color: #D97706; }
+
+/* ============================================================
+   PANNEAU ALERTES UNIFIÉ (F3, F13)
+   ============================================================ */
+QWidget#alertePanel {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+}
+
+QLabel#alertePanelTitle {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1E293B;
+    padding: 2px 2px 0 2px;
+}
+
+QCheckBox#filtreAlertes {
+    font-size: 11px;
+    color: #555555;
+    font-weight: 400;
+}
+
+QWidget#alerteListe {
+    background: transparent;
+}
+
+QFrame#carteAlerte {
+    background: #FFFFFF;
+    border: 1px solid #E8E8E8;
+    border-left: 4px solid #F57C00;
+    border-radius: 2px;
+}
+
+QFrame#carteAlerte[acquitte="true"] {
+    background: #FAFAFA;
+}
+
+QFrame#carteAlerte[severite="critique"] {
+    border-left-color: #C62828;
+}
+
+QFrame#carteAlerte[severite="info"] {
+    border-left-color: #1E88E5;
+}
+
+QLabel#alerteBadge {
+    background-color: #F57C00;
+    color: #FFFFFF;
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-size: 9px;
+    font-weight: 700;
+}
+
+QLabel#alerteBadge[severite="critique"] {
+    background-color: #C62828;
+}
+
+QLabel#alerteBadge[severite="info"] {
+    background-color: #1E88E5;
+}
+
+QLabel#alerteDetail {
+    font-size: 11px;
+    color: #1E293B;
+}
+
+QPushButton#btnAcquitter {
+    background: #FFFFFF;
+    border: 1px solid #2E7D32;
+    border-radius: 2px;
+    color: #2E7D32;
+    font-weight: 700;
+    font-size: 12px;
+}
+
+QPushButton#btnAcquitter:hover {
+    background: #2E7D32;
+    color: #FFFFFF;
+}
+
+QPushButton#btnVoirAlerte {
+    background: #FFFFFF;
+    border: 1px solid #D0D0D0;
+    border-radius: 2px;
+    font-size: 9px;
+    padding: 2px 8px;
+    color: #1E293B;
+}
+
+QPushButton#btnVoirAlerte:hover {
+    border-color: #4A90D9;
+    color: #4A90D9;
+}
+
+QPushButton#btnSupprimer {
+    background: #FFFFFF;
+    border: 1px solid #C62828;
+    border-radius: 2px;
+    color: #C62828;
+    font-weight: 600;
+}
+
+QPushButton#btnSupprimer:hover {
+    background: #C62828;
+    color: #FFFFFF;
+}
+
+QPushButton#btnSupprimer:disabled {
+    color: #B0BEC5;
+    border-color: #E0E0E0;
+    background: #FAFAFA;
+}
+
+/* ---------- Historique alertes salle (Prototype §3) ---------- */
+QGroupBox#alerteHistoriqueCard {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    margin-top: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #1E293B;
+}
+
+QGroupBox#alerteHistoriqueCard::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    top: 4px;
+    padding: 0 4px;
+}
+
+QListWidget#alerteHistoriqueListe {
+    background: #FFFFFF;
+    border: 1px solid #E8E8E8;
+    border-radius: 2px;
+    color: #475569;
+    font-family: "Roboto Mono", "JetBrains Mono", "Consolas", "Courier New", monospace;
+    font-size: 11px;
+}
+
+QListWidget#alerteHistoriqueListe::item {
+    padding: 3px 6px;
+    border-bottom: 1px solid #F1F5F9;
+}
+
+QLabel#alerteFluxBadge {
+    background: #FEF2F2;
+    color: #B91C1C;
+    border: 1px solid #FECACA;
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 700;
+}
 
 /* ============================================================
    ÉTATS / RETOURS UTILISATEUR

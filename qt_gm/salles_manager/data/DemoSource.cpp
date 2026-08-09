@@ -1,6 +1,9 @@
 #include "DemoSource.h"
 
+#include <QDateTime>
 #include <QRandomGenerator>
+
+#include "models/Alerte.h"
 
 DemoSource::DemoSource(QObject* parent)
     : DataSource(parent)
@@ -62,11 +65,27 @@ void DemoSource::modifierSalle(const Salle& salle)
     updated.densHist = previous.densHist;
     updated.entHist = previous.entHist;
     updated.sortHist = previous.sortHist;
+    updated.fluxSortieHist = previous.fluxSortieHist;
+    updated.fluxSortieAnormal = previous.fluxSortieAnormal;
+    updated.derniereAlerteFluxSortieMs = previous.derniereAlerteFluxSortieMs;
     updated.enLigne = true;
     updated.enAttente = false;
     m_salles.insert(updated.id, updated);
     emit salleMiseAJour(updated.id);
     emit logAppend(QStringLiteral("CONFIGURATION modifiée — %1").arg(updated.id));
+}
+
+void DemoSource::supprimerSalle(const QString& id)
+{
+    if (!m_salles.contains(id)) {
+        emit erreur(QStringLiteral("Salle inconnue : %1").arg(id));
+        return;
+    }
+
+    m_salles.remove(id);
+    m_fluxAccum.remove(id);
+    emit salleSupprimee(id);
+    emit logAppend(QStringLiteral("SALLE supprimée — %1").arg(id));
 }
 
 void DemoSource::getHauteurPorte(const QString& salleId)
@@ -104,15 +123,70 @@ void DemoSource::onTick()
     ++m_tick;
     for (auto it = m_salles.begin(); it != m_salles.end(); ++it) {
         Salle& s = it.value();
-        const int base = int(qHash(s.id) % uint(qMax(1, s.capacite / 2)));
-        const int amplitude = qMax(1, s.capacite / 3);
-        s.occupation = qBound(0, base + ((m_tick * 2 + base) % amplitude), s.capacite);
+        const uint hash = qHash(s.id);
+        const int scenario = int(hash) % 5;
+
+        double flux = 0.0; // pers/min cible selon le scénario
+        switch (scenario) {
+        case 0: flux = 1.2; break;              // montée lente
+        case 1: flux = 6.0; break;              // montée rapide
+        case 2: flux = (m_tick / 60) % 2 == 0 ? 2.0 : -1.0; break; // va-et-vient
+        case 3: flux = -1.5; break;             // descente
+        case 4:                                 // remplissage puis sortie brusque (F3)
+            if (m_tick < 75)
+                flux = 8.0;
+            else if (m_tick < 87)
+                flux = -240.0;
+            else
+                flux = 0.3;
+            break;
+        }
+        if (s.occupation >= s.capacite)
+            flux = qMin(flux, -1.0);
+
+        double& accum = m_fluxAccum[s.id];
+        accum += flux / 60.0;
+        int pas = int(accum);
+        if (pas != 0) {
+            accum -= double(pas);
+            if (pas > 0) {
+                s.occupation = qMin(s.capacite, s.occupation + pas);
+                s.nbEntrees += pas;
+            } else {
+                s.occupation = qMax(0, s.occupation + pas);
+                s.nbSorties += -pas;
+            }
+        }
+
+        const double sortieFlux = qMax(0.0, -flux);
+        const Salle::DetectionFluxSortie detection
+            = s.majDetectionFluxSortie(sortieFlux,
+                                       QDateTime::currentMSecsSinceEpoch());
+        if (detection.alerte) {
+            Alerte a;
+            a.salleId = s.id;
+            a.salleNom = s.nom;
+            a.type = QStringLiteral("flux_sortie");
+            a.capteurs = {QStringLiteral("HC-SR04"), QStringLiteral("VL53L0X")};
+            a.detail = QStringLiteral(
+                "Débit sortant %1 pers/min — seuil μ+3σ : %2 "
+                "(μ=%3, σ=%4, fenêtre %5 s)")
+                           .arg(detection.debit, 0, 'f', 0)
+                           .arg(detection.seuil, 0, 'f', 0)
+                           .arg(detection.mu, 0, 'f', 1)
+                           .arg(detection.sigma, 0, 'f', 1)
+                           .arg(detection.points);
+            emit alerte(a);
+            emit logAppend(QStringLiteral("ALERTE F3 — %1 : %2")
+                               .arg(s.id, a.detail));
+        }
+
         s.densite = s.taux();
-        s.tendance = (m_tick % 12 < 6) ? 1.2 : -0.8;
-        if (m_tick % 2 == 0 && s.tendance > 0)
-            ++s.nbEntrees;
-        if (m_tick % 5 == 0 && s.tendance < 0)
-            ++s.nbSorties;
+        s.tendance = flux;
+        s.regime = s.occupation >= 3 ? QStringLiteral("surface")
+                                     : QStringLiteral("clustering");
+        s.confiance = 0.80 + double((m_tick + int(hash)) % 15) / 100.0;
+        s.mettreAJourAnticipation();
         s.pushHistorique();
         emit salleMiseAJour(s.id);
     }

@@ -3,6 +3,7 @@
 #include <QHash>
 #include <QObject>
 
+#include "models/Alerte.h"
 #include "models/Salle.h"
 
 class DataSource : public QObject
@@ -22,6 +23,7 @@ public:
 
     virtual void creerSalle(const Salle& salle) = 0;
     virtual void modifierSalle(const Salle& salle) = 0;
+    virtual void supprimerSalle(const QString& id) = 0;
     virtual void getHauteurPorte(const QString& salleId) = 0;
     virtual void actualiserSalle(const QString& salleId) = 0;
 
@@ -29,12 +31,14 @@ public:
 
 signals:
     void salleAjoutee(const QString& id);
+    void salleSupprimee(const QString& id);
     void salleMiseAJour(const QString& id);
     void hauteurPorteMesuree(const QString& id, double centimetres,
                              bool succes, const QString& note);
     void statutSource(bool connecte, const QString& note);
     void logAppend(const QString& ligne);
     void erreur(const QString& message);
+    void alerte(const Alerte& alerte);
 
 protected:
     QHash<QString, Salle> m_salles;

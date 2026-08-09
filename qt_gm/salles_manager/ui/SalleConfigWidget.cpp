@@ -1,14 +1,17 @@
 #include "SalleConfigWidget.h"
 
 #include <QComboBox>
+#include <QDateTime>
 #include <QDateTimeEdit>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHash>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QStyle>
 #include <QTime>
 #include <QVBoxLayout>
 
@@ -67,6 +70,8 @@ SalleConfigWidget::SalleConfigWidget(QWidget* parent)
     m_boutonNouveau = new QPushButton(QStringLiteral("Nouvelle salle"), this);
     m_boutonActualiser = new QPushButton(QStringLiteral("Actualiser les données"), this);
     m_boutonMasquer = new QPushButton(QStringLiteral("Masquer la carte"), this);
+    m_boutonSupprimer = new QPushButton(QStringLiteral("Supprimer la salle"), this);
+    m_boutonSupprimer->setObjectName(QStringLiteral("btnSupprimer"));
     m_boutonCourbe = new QPushButton(QStringLiteral("Afficher la courbe"), this);
     m_retour = new QLabel(this);
     m_retour->setWordWrap(true);
@@ -74,6 +79,20 @@ SalleConfigWidget::SalleConfigWidget(QWidget* parent)
 
     configurationLayout->addWidget(m_boutonPrincipal);
     configurationLayout->addWidget(m_retour);
+
+    auto* reseau = new QGroupBox(QStringLiteral("État réseau"), this);
+    reseau->setObjectName(QStringLiteral("networkCard"));
+    m_reseauBadge = new QLabel(QStringLiteral("—"), reseau);
+    m_reseauBadge->setObjectName(QStringLiteral("networkBadge"));
+    m_reseauDetail = new QLabel(QStringLiteral("—"), reseau);
+    m_reseauDetail->setObjectName(QStringLiteral("networkDetail"));
+    m_reseauDetail->setWordWrap(true);
+    auto* reseauLayout = new QVBoxLayout(reseau);
+    reseauLayout->setContentsMargins(10, 12, 10, 10);
+    reseauLayout->setSpacing(6);
+    reseauLayout->addWidget(m_reseauBadge);
+    reseauLayout->addWidget(m_reseauDetail);
+    m_reseauBox = reseau;
 
     auto* actions = new QGroupBox(QStringLiteral("Actions de la salle"), this);
     actions->setObjectName(QStringLiteral("actionCard"));
@@ -83,6 +102,7 @@ SalleConfigWidget::SalleConfigWidget(QWidget* parent)
     actionsLayout->addWidget(m_boutonActualiser);
     actionsLayout->addWidget(m_boutonCourbe);
     actionsLayout->addWidget(m_boutonMasquer);
+    actionsLayout->addWidget(m_boutonSupprimer);
 
     m_sallesMasquees = new QComboBox(this);
     m_sallesMasquees->setPlaceholderText(QStringLiteral("Aucune salle masquée"));
@@ -99,6 +119,7 @@ SalleConfigWidget::SalleConfigWidget(QWidget* parent)
     layout->setSpacing(8);
     layout->addWidget(m_titre);
     layout->addWidget(configuration);
+    layout->addWidget(reseau);
     layout->addWidget(actions);
     layout->addWidget(restauration);
     layout->addStretch();
@@ -127,6 +148,9 @@ SalleConfigWidget::SalleConfigWidget(QWidget* parent)
     });
     connect(m_boutonMasquer, &QPushButton::clicked, this, [this]() {
         emit masquageDemande(m_salleId);
+    });
+    connect(m_boutonSupprimer, &QPushButton::clicked, this, [this]() {
+        emit suppressionDemandee(m_salleId);
     });
     connect(m_boutonCourbe, &QPushButton::clicked, this, [this]() {
         emit courbeDemandee(lireFormulaire());
@@ -186,8 +210,50 @@ void SalleConfigWidget::afficherSalle(const Salle& salle)
     m_hauteur->setText(m_hauteurMesuree
                            ? QStringLiteral("%1 cm").arg(m_hauteurCm, 0, 'f', 1)
                            : QString());
+    afficherStatutReseau(salle);
     afficherInfo(QStringLiteral("Salle sélectionnée : %1").arg(salle.id));
     actualiserEtatBoutons();
+}
+
+void SalleConfigWidget::afficherStatutReseau(const Salle& salle)
+{
+    QString badge;
+    QString niveau;
+    if (salle.enAttente) {
+        badge = QStringLiteral("EN ATTENTE");
+        niveau = QStringLiteral("pending");
+    } else if (salle.evacuationActive) {
+        badge = QStringLiteral("EVACUATION");
+        niveau = QStringLiteral("critical");
+    } else if (!salle.enLigne) {
+        badge = QStringLiteral("HORS LIGNE");
+        niveau = QStringLiteral("offline");
+    } else {
+        badge = QStringLiteral("EN LIGNE");
+        niveau = QStringLiteral("normal");
+    }
+    m_reseauBadge->setText(badge);
+    m_reseauBadge->setProperty("level", niveau);
+    m_reseauBadge->style()->unpolish(m_reseauBadge);
+    m_reseauBadge->style()->polish(m_reseauBadge);
+
+    QString detail;
+    if (salle.enAttente) {
+        detail = QStringLiteral("Confirmation de configuration attendue du nœud");
+    } else if (salle.enLigne) {
+        detail = QStringLiteral("Dernier contact : à l'instant");
+    } else if (salle.dernierHeartbeatMs > 0) {
+        const qint64 ecartS =
+            (QDateTime::currentMSecsSinceEpoch() - salle.dernierHeartbeatMs) / 1000;
+        detail = QStringLiteral("Dernier contact : il y a %1 s").arg(ecartS);
+    } else {
+        detail = QStringLiteral("Aucun contact reçu du nœud");
+    }
+    if (salle.uptimeS > 0) {
+        detail += QStringLiteral("   |   Uptime : %1 min")
+                      .arg(salle.uptimeS / 60);
+    }
+    m_reseauDetail->setText(detail);
 }
 
 void SalleConfigWidget::afficherMesure(const QString& id, double centimetres,
@@ -284,6 +350,8 @@ void SalleConfigWidget::setModeCreation(bool creation)
     m_boutonNouveau->setVisible(!creation);
     m_boutonActualiser->setVisible(!creation);
     m_boutonMasquer->setVisible(!creation);
+    m_boutonSupprimer->setVisible(!creation);
     m_boutonCourbe->setVisible(!creation);
+    m_reseauBox->setVisible(!creation);
     actualiserEtatBoutons();
 }

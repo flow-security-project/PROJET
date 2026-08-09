@@ -22,6 +22,7 @@ public:
 
     void afficherCreation();
     void afficherSalle(const Salle& salle);
+    void afficherStatutReseau(const Salle& salle);
     void afficherMesure(const QString& id, double centimetres,
                         bool succes, const QString& note);
     void afficherErreur(const QString& message);
@@ -35,6 +36,7 @@ signals:
     void mesureDemandee(const QString& id);
     void actualisationDemandee(const QString& id);
     void masquageDemande(const QString& id);
+    void suppressionDemandee(const QString& id);
     void courbeDemandee(const Salle& salle);
     void nouvelleDemandee();
     void restaurationDemandee(const QString& id);
@@ -56,11 +58,15 @@ private:
     QPushButton* m_boutonNouveau = nullptr;
     QPushButton* m_boutonActualiser = nullptr;
     QPushButton* m_boutonMasquer = nullptr;
+    QPushButton* m_boutonSupprimer = nullptr;
     QPushButton* m_boutonCourbe = nullptr;
     QComboBox* m_sallesMasquees = nullptr;
     QPushButton* m_boutonRestaurer = nullptr;
     QLabel* m_titre = nullptr;
     QLabel* m_retour = nullptr;
+    QLabel* m_reseauBadge = nullptr;
+    QLabel* m_reseauDetail = nullptr;
+    QWidget* m_reseauBox = nullptr;
 
     QString m_salleId;
     double m_hauteurCm = -1.0;

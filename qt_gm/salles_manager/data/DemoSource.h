@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QHash>
 #include <QTimer>
 
 #include "data/DataSource.h"
@@ -17,6 +18,7 @@ public:
 
     void creerSalle(const Salle& salle) override;
     void modifierSalle(const Salle& salle) override;
+    void supprimerSalle(const QString& id) override;
     void getHauteurPorte(const QString& salleId) override;
     void actualiserSalle(const QString& salleId) override;
 
@@ -26,4 +28,5 @@ private slots:
 private:
     QTimer m_timer;
     int m_tick = 0;
+    QHash<QString, double> m_fluxAccum;
 };
