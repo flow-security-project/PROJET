@@ -3,10 +3,12 @@
 #include <algorithm>
 
 #include <QDateTime>
+#include <QDir>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
 
+#include "engine/densite/DensiteEstimator.h"
 #include "models/Alerte.h"
 
 MqttSource::MqttSource(QObject* parent)
@@ -24,6 +26,11 @@ MqttSource::MqttSource(QObject* parent)
     m_watchdogTimer.setInterval(1000);
     connect(&m_watchdogTimer, &QTimer::timeout,
             this, &MqttSource::onWatchdogTimeout);
+}
+
+MqttSource::~MqttSource()
+{
+    qDeleteAll(m_densite);
 }
 
 void MqttSource::start()
@@ -65,6 +72,7 @@ void MqttSource::creerSalle(const Salle& salle)
     pending.enLigne = false;
     pending.occupation = -1;
     m_salles.insert(pending.id, pending);
+    preparerDensite(pending.id);
     emit salleAjoutee(pending.id);
     publierConfiguration(pending);
     emit logAppend(QStringLiteral("SALLE %1 créée localement — confirmation MQTT attendue")
@@ -82,6 +90,7 @@ void MqttSource::modifierSalle(const Salle& salle)
     const Salle previous = m_salles.value(salle.id);
     updated.occupation = previous.occupation;
     updated.densite = previous.densite;
+    updated.nbPersonnesEstime = previous.nbPersonnesEstime;
     updated.tendance = previous.tendance;
     updated.nbEntrees = previous.nbEntrees;
     updated.nbSorties = previous.nbSorties;
@@ -107,6 +116,9 @@ void MqttSource::supprimerSalle(const QString& id)
 
     m_salles.remove(id);
     m_departTimes.remove(id);
+    if (auto* estimateur = m_densite.take(id)) {
+        delete estimateur;
+    }
     emit salleSupprimee(id);
     emit logAppend(QStringLiteral("SALLE supprimée du dashboard — %1 "
                                   "(le nœud reste actif, aucune commande de "
@@ -209,10 +221,16 @@ void MqttSource::onMessage(const QString& topic, const QByteArray& payload)
     if (suffix == QStringLiteral("raw/tof")) {
         const double millimetres = object.value(QStringLiteral("d_mm")).toDouble(-1.0);
         const int status = object.value(QStringLiteral("status")).toInt(4);
+        const qint64 tMs = qint64(object.value(QStringLiteral("t_ms")).toDouble(0.0));
         if (id == m_mesureId && status != 4 && millimetres > 0.0) {
             m_mesuresMm.append(millimetres);
             if (m_mesuresMm.size() >= 7)
                 finaliserMesure(true, QStringLiteral("Mesure ToF confirmée"));
+        }
+        if (m_salles.contains(id) && m_densite.contains(id)) {
+            m_densite[id]->ajouterEchantillon(millimetres,
+                                              tMs > 0 ? tMs
+                                                      : QDateTime::currentMSecsSinceEpoch());
         }
         return;
     }
@@ -263,6 +281,8 @@ void MqttSource::onMessage(const QString& topic, const QByteArray& payload)
             salle.hauteurPorteCm = object.value(QStringLiteral("hauteurPorte_cm"))
                                        .toDouble(salle.hauteurPorteCm);
             salle.hauteurPorteMesuree = salle.hauteurPorteCm > 0.0;
+            if (m_densite.contains(id))
+                m_densite[id]->setHauteurPorteCm(salle.hauteurPorteCm);
         }
         salle.enAttente = false;
     } else {
@@ -300,6 +320,14 @@ void MqttSource::onWatchdogTimeout()
             salle.mettreAJourAnticipation();
             salle.pushHistorique();
             verifierFluxSortie(salle.id);
+            if (m_densite.contains(salle.id)) {
+                const DensiteEstimation est
+                    = m_densite[salle.id]->estimer(maintenant);
+                salle.densite = est.surface;
+                salle.regime = est.regime;
+                salle.confiance = est.confiance;
+                salle.nbPersonnesEstime = est.nbPersonnes;
+            }
             emit salleMiseAJour(salle.id);
         }
     }
@@ -324,12 +352,37 @@ void MqttSource::finaliserMesure(bool succes, const QString& note)
         Salle& salle = m_salles[id];
         salle.hauteurPorteCm = centimetres;
         salle.hauteurPorteMesuree = true;
+        if (m_densite.contains(id))
+            m_densite[id]->setHauteurPorteCm(centimetres);
         emit salleMiseAJour(id);
     }
     emit hauteurPorteMesuree(id, centimetres, true,
                              QStringLiteral("%1 cm, médiane de %2 mesures")
                                  .arg(centimetres, 0, 'f', 1)
                                  .arg(mesures.size()));
+}
+
+void MqttSource::preparerDensite(const QString& salleId)
+{
+    if (m_densite.contains(salleId))
+        return;
+
+    auto* estimateur = new DensiteEstimator();
+    const Salle& salle = m_salles.value(salleId);
+    if (salle.hauteurPorteMesuree && salle.hauteurPorteCm > 0.0)
+        estimateur->setHauteurPorteCm(salle.hauteurPorteCm);
+
+    // Calibration in situ optionnelle (F18) : calibration_{id}.json
+    const QString chemin
+        = QDir::current().filePath(QStringLiteral("calibration_%1.json").arg(salleId));
+    if (estimateur->chargerCalibration(chemin))
+        emit logAppend(QStringLiteral("F17 — calibration chargée pour %1 (%2)")
+                           .arg(salleId, chemin));
+    else
+        emit logAppend(QStringLiteral("F17 — %1 : table par défaut (calibration %2 absente)")
+                           .arg(salleId, chemin));
+
+    m_densite.insert(salleId, estimateur);
 }
 
 void MqttSource::verifierFluxSortie(const QString& salleId)

@@ -15,11 +15,11 @@ Une courbe de correspondance surface → nombre estimé est construite in situ p
 Un observateur humain compte les personnes toutes les 5 secondes pendant 30 minutes de flux varié (ground truth).
 Le capteur enregistre simultanément la surface occupée horodatée.
 Une régression polynomiale est ajustée sur les données appariées.
-La fonction résultante est convertie en table de consultation légère embarquée sur l'ESP32-S3.
+La fonction résultante est convertie en table de consultation légère chargée côté Qt (fichier calibration_{id}.json), où s'exécute toute l'estimation (processing 100 % déporté côté PC).
 Cette calibration est spécifique à chaque porte (hauteur montage, largeur, revêtement sol). Elle doit être répétée après tout déplacement matériel.
 
 Précision et Limites Assumées
 Régime	Précision	Usage Valide
 1–2 personnes	≥ 95 %	Comptage directionnel
 ≥ 3 personnes	± 15 % (MAPE)	Gestion saturation, alerte, prédiction
-Le système n'est jamais utilisé seul pour déclencher une alerte. L'estimation de densité est toujours corrélée aux autres signaux (acoustique, thermique, temporel) pour confirmer les anomalies et éliminer les faux positifs.
+Le système n'est jamais utilisé seul pour déclencher une alerte. L'estimation de densité est toujours corrélée aux comptages A-B et aux signaux temporels pour valider les anomalies et éliminer les faux positifs.

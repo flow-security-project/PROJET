@@ -17,6 +17,9 @@ qt_add_executable(salles_manager
     models/Alerte.h
     models/AlerteModel.h
 
+    engine/densite/DensiteEstimator.h
+    engine/densite/DensiteEstimator.cpp
+
     data/DataSource.h
     data/DataSource.cpp
     data/DemoSource.h

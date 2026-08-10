@@ -6,12 +6,15 @@
 #include "data/DataSource.h"
 #include "data/MqttClient.h"
 
+class DensiteEstimator;
+
 class MqttSource : public DataSource
 {
     Q_OBJECT
 
 public:
     explicit MqttSource(QObject* parent = nullptr);
+    ~MqttSource() override;
 
     void start() override;
     void stop() override;
@@ -37,7 +40,7 @@ private slots:
 private:
     void publierConfiguration(const Salle& salle);
     void finaliserMesure(bool succes, const QString& note);
-    void ajouterNoeudDecouvert(const QString& id);
+    void preparerDensite(const QString& salleId);
     void verifierFluxSortie(const QString& salleId);
     static double mediane(QVector<double> valeurs);
 
@@ -47,4 +50,5 @@ private:
     QString m_mesureId;
     QVector<double> m_mesuresMm;
     QHash<QString, QVector<qint64>> m_departTimes;
+    QHash<QString, DensiteEstimator*> m_densite;
 };

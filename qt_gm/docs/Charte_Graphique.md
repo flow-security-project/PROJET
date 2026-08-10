@@ -201,7 +201,7 @@ QLabel#badgeAttention {
 | Barre état global | Fond #F5F5F5, séparateur bas 1px #D0D0D0, texte 12px #555555, indicateurs cercles pleins 8px couleur sémantique |
 | Grille supervision | Cards blanches bordure 1px #D0D0D0, padding 12px, nom salle 14px SemiBold, occupation 24px Mono Bold, LED cercle 12px plein couleur sémantique |
 | Courbe QCustomPlot | Fond blanc, grille #E8E8E8 pointillés, axes #555555, courbe A-B #1565C0 2px, aire densité #F57C00 20% opacité, légende 11px coin supérieur gauche |
-| Conditions évacuation | Barres fond #F5F5F5, chunk couleur sémantique, label droite 12px Mono, checkmark ✓ vert #2E7D32 quand seuil atteint |
+| Mode évacuation forcée | Led/LCD passent en mode évacuation (override manuel maintenance), badge critique #C62828 |
 | Panneau alertes | Lignes alternance blanc/#FAFAFA, séparateurs 1px #E8E8E8, badge gauche 4px largeur pleine hauteur couleur sévérité, timestamp 11px Mono #555555 |
 | Formulaire config | Labels gauche alignés droite 13px #555555, champs largeur uniforme, bouton envoi bas droite style standard, statut confirmation 11px sous bouton |
 | Reflet LCD | Cadre #D0D0D0 2px, fond #1A1A1A, texte #2E7D32 monospace 14px (simulation LCD réel), pas d'effet glow/néon |

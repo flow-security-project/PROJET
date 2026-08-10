@@ -22,6 +22,7 @@ struct Salle
 
     int occupation = -1;
     double densite = 0.0;
+    int nbPersonnesEstime = -1;
     double tendance = 0.0;
     double penteTendance = 0.0;
     int anticipationMin = -1;

@@ -7,7 +7,7 @@ Voici le prototype complet et détaillé de l'interface Qt Creator pour **i++ v4
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  BARRE D'ÉTAT GLOBAL                                                        │
-│  ÉVACUATION: [🟢 INACTIF] | MQTT: 🟢 Connecté | Asterisk: 🟢 Enregistré    │
+│  MQTT: 🟢 Connecté | Asterisk: 🟢 Enregistré                              │
 ├──────────────────────────────┬──────────────────────────────────────────────┤
 │                              │                                              │
 │  ZONE SUPERVISION            │  ZONE DÉTAIL SALLE SÉLECTIONNÉE              │
@@ -25,9 +25,9 @@ Voici le prototype complet et détaillé de l'interface Qt Creator pour **i++ v4
 │                              │                                              │
 ├──────────────────────────────┴──────────────────────────────────────────────┤
 │  PANNEAU ALERTES UNIFIÉ                                                     │
-│  🔴 14:23 ÉVACUATION AUTO B204 | Audio✅ Surface✅ | Appel Sécu ✅ Terminé  │
-│  ⚠️ 14:20 Bousculade A102 score 0.94 | Audio✅ ToF✅ | Appel Sécu 🟡 En cours│
-│  👤 14:18 Immobile Couloir Est 6min | Appel Infirmerie ✅ Terminé           │
+│  ⚠️ 14:20 Saturation A102 96% depuis 4min | Appel Gestion 🟡 En cours      │
+│  👤 14:18 Intrusion TP3 03h17 hors horaires | Appel Agent ✅ Terminé        │
+│  ⚠️ 14:15 Flux sortie anormal B204 μ+3σ dépassé | Aucun appel               │
 │  [Filtrer ▼] [Exporter CSV] [Acquitter Sélection]                          │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -59,15 +59,6 @@ C'est l'onglet par défaut au clic sur une salle dans la grille.
 │  │ ████████████████░░░░░░░░ 78% → Tendance: +3.2 pers/min    │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                  │
-│  CONDITIONS ÉVACUATION (Auto)                                   │
-│  ┌────────────────────────────────────────────────────────────┐ │
-│  │ 🔊 Audio foule     : ████░░ 87%  (seuil: P99)            │ │
-│  │ 🌡️ Gradient T°     : ██░░░░ 42%  (seuil: 2°C/min)        │ │
-│  │ 🚪 Saturation porte: █████░ 98% ✅ (seuil: 95%)           │ │
-│  │                                                            │ │
-│  │ Score fusion: 2/3 → ÉVACUATION ACTIVE depuis 2min 14s    │ │
-│  └────────────────────────────────────────────────────────────┘ │
-│                                                                  │
 │  REFLET LCD LOCAL                                               │
 │  ┌────────────────────┐                                         │
 │  │ Ligne 1: Occ: 28/30│  ← Miroir exact LCD 16x2 boîtier     │ │
@@ -79,7 +70,6 @@ C'est l'onglet par défaut au clic sur une salle dans la grille.
 **Types de sortie visuels :**
 -   QCustomPlot : courbe ligne + aire remplie, scroll temps réel 1Hz
 -   QProgressBar custom : barre anticipation avec gradient couleur
--   Barres conditions évacuation : progression vers seuil + checkmark vert quand atteint
 -   QLabel reflet LCD : police monospace, bordure grise, mise à jour temps réel
 
 ---
@@ -129,11 +119,9 @@ C'est l'onglet par défaut au clic sur une salle dans la grille.
 │  ┌────────────────────────────────────────────────────────────┐ │
 │  │ Heure  │ Type          │ Capteurs   │ Score │ Appel       │ │
 │  │────────│───────────────│────────────│───────│─────────────│ │
-│  │ 14:23  │ Évacuation    │ Audio+Surf │ 2/3   │ ✅ Sécu     │ │
-│  │ 14:20  │ Bousculade    │ Audio+ToF  │ 0.94  │ 🟡 En cours │ │
-│  │ 13:45  │ Saturation    │ ToF        │ 96%   │ ✅ Gestion  │ │
-│  │ 11:30  │ Immobile      │ ToF        │ 5m12s │ ✅ Infirmer │ │
-│  │ 09:15  │ Intrusion     │ A-B        │ 2m30s │ ❌ Échoué   │ │
+│  │ 14:20  │ Saturation    │ ToF        │ 96%   │ 🟡 En cours │ │
+│  │ 13:45  │ Flux sortie   │ HC-SR04    │ μ+3σ  │ —           │ │
+│  │ 11:30  │ Intrusion     │ A-B        │ 2m30s │ ✅ Agent    │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                  │
 │  FILTRES: [Type ▼] [Date ▼] [Capteur ▼]                        │
@@ -143,7 +131,7 @@ C'est l'onglet par défaut au clic sur une salle dans la grille.
 
 **Types de sortie :**
 -   QTableWidget colonnes triables, lignes colorées par sévérité
--   Badges couleur : 🔴 rouge (évacuation), ⚠️ orange (bousculade/intrusion), 👤 jaune (immobile)
+-   Badges couleur : 🔴 rouge (saturation critique), ⚠️ orange (intrusion / flux sortie)
 -   Statut appel : ✅ terminé vert, 🟡 en cours jaune, ❌ échoué rouge
 -   Export CSV filtré par salle actuelle
 
@@ -155,19 +143,14 @@ C'est l'onglet par défaut au clic sur une salle dans la grille.
 ┌──────────────────────────────────────────────────────────────────┐
 │  ALERTES TEMPS RÉEL (Toutes Salles)                              │
 │  ┌────────────────────────────────────────────────────────────┐ │
-│  │ 🔴 14:23:07 │ B204 │ ÉVACUATION AUTO                      │ │
-│  │              │ Déclencheurs: Audio(94%) + Surface(98%)     │ │
-│  │              │ Appel Agent Sécu: ✅ Terminé 14:23:12       │ │
+│  │ ⚠️ 14:20:33 │ A102 │ SATURATION CRITIQUE                  │ │
+│  │              │ 96% capacité | depuis 4 min                 │ │
+│  │              │ Appel Gestion: 🟡 En cours (00:45)          │ │
 │  │              │ [Voir Détail] [Acquitter]                   │ │
 │  ├────────────────────────────────────────────────────────────┤ │
-│  │ ⚠️ 14:20:33 │ A102 │ BOUSCULADE                           │ │
-│  │              │ Score: 0.94 | Capteurs: Audio + ToF         │ │
-│  │              │ Appel Sécu: 🟡 En cours (00:45)             │ │
-│  │              │ [Voir Détail] [Acquitter]                   │ │
-│  ├────────────────────────────────────────────────────────────┤ │
-│  │ 👤 14:18:12 │ C-Est│ PERSONNE IMMOBILE                    │ │
-│  │              │ Durée: 6min 12s | Occupation: 1             │ │
-│  │              │ Appel Infirmerie: ✅ Terminé 14:18:20       │ │
+│  │ 👤 14:18:12 │ TP3 │ INTRUSION HORS HORAIRES               │ │
+│  │              │ Durée: 2m30s | Horaire: 03h17               │ │
+│  │              │ Appel Agent: ✅ Terminé 14:18:20            │ │
 │  │              │ [Voir Détail] [Acquitter]                   │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                  │
@@ -190,13 +173,12 @@ C'est l'onglet par défaut au clic sur une salle dans la grille.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│ ÉVACUATION: [🟢 INACTIF] │ MQTT: 🟢 Connecté │ Asterisk: 🟢 SIP │
+│ MQTT: 🟢 Connecté │ Asterisk: 🟢 SIP │
 │ Nœuds: 4/5 en ligne      │ Dernier msg: 14:23:07               │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 **États possibles :**
--   Évacuation : 🟢 INACTIF / 🔴 ACTIVE (clignotant) / 🟡 PARTIELLE (certaines salles seulement)
 -   MQTT : 🟢 Connecté / 🟡 Reconnexion... / 🔴 Déconnecté
 -   Asterisk : 🟢 Enregistré / 🟡 En appel / 🔴 Hors service
 -   Nœuds : X/Y en ligne (clignote orange si Y-X > 0)
@@ -209,7 +191,7 @@ C'est l'onglet par défaut au clic sur une salle dans la grille.
 | :--- | :--- | :--- | :--- | :--- |
 | Envoyer Configuration | Clic après saisie valide | `salle/{id}/config/set` | JSON config complet | Bouton désactivé 2s + label statut ✅/❌ |
 | Tester LED/LCD | Clic bouton test | `salle/{id}/test` | `{"composant":"led","valeur":"rouge"}` | Label résultat + latence ms |
-| Forcer Évacuation | Clic bouton maintenance | `salle/{id}/evacuation/force` | `{"active":true}` | Conditions évacuation passent à 3/3 override |
+| Forcer Évacuation | Clic bouton maintenance | `salle/{id}/evacuation/force` | `{"active":true}` | LED/LCD passent en mode évacuation (override manuel) |
 | Reset Alertes | Clic bouton maintenance | `salle/{id}/alerte/reset` | `{"type":"all"}` | Badge alertes salle effacé |
 | Acquitter Alerte | Clic ligne alerte | `backend/alerte/acquit` (interne) | ID alerte + timestamp | Ligne grisée + log opérateur |
 | Voir Détail Alerte | Clic ligne alerte | — (action UI locale) | — | Sélection salle Zone 2 + onglet Alertes |
@@ -223,14 +205,14 @@ C'est l'onglet par défaut au clic sur une salle dans la grille.
 | Type Sortie | Composant Qt | Usage dans i++ |
 | :--- | :--- | :--- |
 | Graphique temps réel | QCustomPlot | Courbe occupation + densité (Onglet Visualisation) |
-| Barre progression custom | QProgressBar + QPainter | Anticipation saturation + conditions évacuation |
+| Barre progression custom | QProgressBar + QPainter | Anticipation saturation |
 | Tableau données | QTableWidget | Historique alertes salle, configuration |
 | Liste riche custom | QListView + QWidgetItemDelegate | Panneau alertes unifié avec détails expandables |
 | Formulaire validé | QFormLayout + QValidator | Configuration salle |
 | Indicateur état | QLabel + QPixmap icône | Barre état global, reflet LCD, statut commandes |
 | Feedback temporel | QTimer + QLabel | Latence tests, durée appels, countdown anticipation |
 | Dialog fichier | QFileDialog | Export CSV/PDF |
-| Animation | QGraphicsEffect + QTimer | Clignotement évacuation, transition états |
+| Animation | QGraphicsEffect + QTimer | Clignotement stroboscope LED, transition états |
 | Notification sonore PC | QSoundEffect / Asterisk TTS | Alarme locale dashboard (optionnel, complémentaire Asterisk) |
 
-Ce prototype couvre **100% des 19 fonctionnalités** avec une spécification d'implémentation précise. Chaque élément d'interface a un rôle fonctionnel défini, un composant Qt identifié, et un lien explicite avec les signaux MQTT. Souhaitez-vous que je génère le code C++ squelette de la classe principale `MainWindow` correspondant à ce prototype ?
+Ce prototype couvre **100% des 16 fonctionnalités** avec une spécification d'implémentation précise. Chaque élément d'interface a un rôle fonctionnel défini, un composant Qt identifié, et un lien explicite avec les signaux MQTT. Souhaitez-vous que je génère le code C++ squelette de la classe principale `MainWindow` correspondant à ce prototype ?

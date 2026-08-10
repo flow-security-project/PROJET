@@ -5,12 +5,15 @@
 
 #include "data/DataSource.h"
 
+class DensiteEstimator;
+
 class DemoSource : public DataSource
 {
     Q_OBJECT
 
 public:
     explicit DemoSource(QObject* parent = nullptr);
+    ~DemoSource() override;
 
     void start() override;
     void stop() override;
@@ -26,7 +29,12 @@ private slots:
     void onTick();
 
 private:
+    void simulerTof(Salle& salle, qint64 maintenantMs);
+
     QTimer m_timer;
     int m_tick = 0;
     QHash<QString, double> m_fluxAccum;
+    QHash<QString, DensiteEstimator*> m_densite;
+    QHash<QString, qint64> m_dernierTofMs;
+    QHash<QString, bool> m_presenceToF;
 };

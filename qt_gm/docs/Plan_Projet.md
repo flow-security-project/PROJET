@@ -52,19 +52,15 @@
 │  │   ├─ ab_system/     → séquence A-B, anti-rebond, comptage E/S (F16)      │  │
 │  │   ├─ occupation/    → occupation, capacité, anticipation (F2)            │  │
 │  │   ├─ densite/       → clustering + surface + lookup table calibrée (F17) │  │
-│  │   ├─ audio/         → FFT, RMS, percentile99, bande cris                 │  │
-│  │   ├─ thermique/     → dT/dt                                               │  │
-│  │   ├─ fusion/        → score bousculade, critères évacuation 2/3 (F9,F10) │  │
-│  │   ├─ securite/      → intrusion horaires, personne immobile (F11,F12)    │  │
+│  │   ├─ securite/      → intrusion horaires (F11)                           │  │
 │  │   ├─ alerts/        → file d'alertes, acquittement, historique, export   │  │
 │  │   └─ ari_client/    → appels Asterisk TTS (F13) + statut appels          │  │
 │  │                                                                          │  │
 │  │  [2] UI LAYER (charte Corporate, prototype approuvé)                     │  │
-│  │   ├─ status_bar/    → MQTT, Asterisk, évacuation, nœuds en ligne         │  │
+│  │   ├─ status_bar/    → MQTT, Asterisk, nœuds en ligne                     │  │
 │  │   ├─ salle_grid/    → supervision multi-salles, hors ligne "NON FIABLE"  │  │
 │  │   ├─ visualisation/ → QCustomPlot A-B + densité + régime (F5,F19)        │  │
 │  │   ├─ anticipation/  → barre "saturation prévue dans X min" (F2)          │  │
-│  │   ├─ conditions_evac/ → 3 barres seuils + checkmark (F9)                 │  │
 │  │   ├─ lcd_mirror/    → reflet LCD 16x2 temps réel (F8)                    │  │
 │  │   ├─ configuration/ → formulaire + tests maintenance (F7)                │  │
 │  │   ├─ alert_panel/   → alertes unifiées, filtres, acquittement (F3,F13)   │  │
@@ -122,21 +118,16 @@ dashboard/
  ├── engine/                       ← [1] PROCESSING ENGINE (sans UI, testable seul)
  │    ├── ingestor/                → QMqttClient, validation payloads, buffers par salle
  │    ├── filtrage/                → médian 3 trames, lissage, fenêtres glissantes
- │    ├── ab_system/               → détection séquence A-B, anti-rebond,
- │    │                               comptage entrée/sortie (F16)
- │    ├── occupation/              → occupation courante, anticipation tendance (F2)
- │    ├── densite/                 → clustering (régime bas 1-2 pers.),
- │    │                               surface occupée + lookup table (régime haut) (F17)
- │    ├── audio/                   → FFT, RMS, percentile99, bande cris (complément Qt)
- │    ├── thermique/               → dT/dt sur fenêtre 30 s
- │    ├── fusion/                  → corrélation ≥2 capteurs, score [0-1] (F10),
- │    │                               critères évacuation 2/3 pendant 3 s (F9)
- │    ├── securite/                → intrusion hors horaires (F11),
- │    │                               personne immobilisée variance ≈0 (F12)
- │    ├── alerts/                  → file d'alertes, sévérité, acquittement,
- │    │                               historique horodaté, export CSV/PDF (F4)
- │    └── ari_client/              → Stasis app, création channel, playback TTS,
- │                                    statut d'appel (F13)
+│    ├── ab_system/               → détection séquence A-B, anti-rebond,
+│    │                               comptage entrée/sortie (F16)
+│    ├── occupation/              → occupation courante, anticipation tendance (F2)
+│    ├── densite/                 → clustering (régime bas 1-2 pers.),
+│    │                               surface occupée + lookup table (régime haut) (F17)
+│    ├── securite/                → intrusion hors horaires (F11)
+│    ├── alerts/                  → file d'alertes, sévérité, acquittement,
+│    │                               historique horodaté, export CSV/PDF (F4)
+│    └── ari_client/              → Stasis app, création channel, playback TTS,
+│                                    statut d'appel (F13)
  ├── ui/                           ← [2] UI LAYER (charte Corporate)
  │    ├── main_window              → splitter 3 zones : barre état / grille+détail / alertes
  │    ├── status_bar / salle_grid / visualisation (QCustomPlot) / anticipation /
@@ -168,7 +159,7 @@ dashboard/
 | :--- | :--- | :--- | :--- |
 | Configuration salle | `salle/{id}/config/set` | `{"nom":"B204","capacite":30,"horaires":{"debut":"07:00","fin":"22:00"}}` | Mise à jour RAM + confirmation |
 | Forcer évacuation | `salle/{id}/evacuation/force` | `{"active":true}` | Stroboscope LED immédiat |
-| Reset alerte | `salle/{id}/alerte/reset` | `{"type":"bousculade"}` | Acquittement local |
+| Reset alerte | `salle/{id}/alerte/reset` | `{"type":"all"}` | Acquittement local |
 | Test maintenance | `salle/{id}/test` | `{"composant":"led","valeur":"rouge"}` | Diagnostic LED/LCD |
 | Demande état | `salle/{id}/etat/get` | `{}` | Réponse état capteurs |
 
@@ -187,8 +178,7 @@ dashboard/
 MQTT brut ─► ingestor ─► filtrage ─► ab_system ─► occupation / anticipation
                                       │
                                       ├──► densite (clustering / surface calibrée)
-                                      ├──► audio (RMS/FFT/P99) ──► fusion ─► alertes ─► ari_client
-                                      └──► thermique (dT/dt) ────► évacuation ──► UI + LED/LCD
+                                      └──► securite (intrusion hors horaires) ─► alertes ─► ari_client
 ```
 
 1. **Ingestor** : subscription wildcard `salle/+/raw/#`, validation JSON, buffers par salle.
@@ -196,9 +186,8 @@ MQTT brut ─► ingestor ─► filtrage ─► ab_system ─► occupation / a
 3. **Système A-B** : corrélation temporelle VL53L0X ↔ HC-SR04 → direction validée (F16).
 4. **Occupation** : cumul entrées − sorties, tendance (F2).
 5. **Densité** : bascule automatique clustering ↔ surface selon régime (F17, F19).
-6. **Fusion** : score bousculade (≥2 capteurs corrélés) + critères évacuation (F9, F10).
-7. **Sécurité** : intrusion, personne immobile (F11, F12).
-8. **Alertes** : file horodatée → panneau Qt + commandes LED/LCD + appels Asterisk (F13).
+6. **Sécurité** : intrusion hors horaires (F11).
+7. **Alertes** : file horodatée → panneau Qt + commandes LED/LCD + appels Asterisk (F13).
 
 ### Dépendances entre sous-systèmes
 
@@ -259,15 +248,13 @@ APPL Qt  ──► processing ──► alertes ──► exports CSV/PDF
 | 3.4 | Gradient thermique dT/dt | Test source de chaleur |
 | 3.5 | Indicateur de régime + score de confiance (F19) | Affichage vérifié |
 
-### Phase 4 — Sécurité Autonome dans Qt (F9-F12)
+### Phase 4 — Sécurité dans Qt (F3, F11)
 
 | # | Tâche | Validation |
 | :--- | :--- | :--- |
-| 4.1 | Fusion multimodale + score bousculade (≥2 capteurs corrélés) | Tests faux positifs |
-| 4.2 | Mode évacuation auto (2/3 critères pendant 3 s) | Scénario incendie simulé |
-| 4.3 | Intrusion hors horaires (>2 min) + personne immobilisée (>5 min) | Scénarios temporisés |
-| 4.4 | Commandes LED stroboscope + LCD "EVACUATION →" via MQTT | Visuel conforme F9 |
-| 4.5 | Détection flux de sortie anormal (μ+3σ) (F3) | Scénario évacuation |
+| 4.1 | Intrusion hors horaires (>2 min) | Scénario temporisé |
+| 4.2 | Détection flux de sortie anormal (μ+3σ) (F3) | Scénario évacuation |
+| 4.3 | Commandes maintenance via MQTT (test LED/LCD, force évac manuelle, reset alertes) | Round-trip OK |
 
 ### Phase 5 — Interface Dashboard Qt (F1-F8)
 
@@ -286,7 +273,7 @@ APPL Qt  ──► processing ──► alertes ──► exports CSV/PDF
 | # | Tâche | Validation |
 | :--- | :--- | :--- |
 | 6.1 | Client ARI dans Qt : connexion Stasis, création channel | Ping ARI OK |
-| 6.2 | Génération TTS + playback (4 scénarios : bousculade, saturation, intrusion, immobile) | Appel réel reçu |
+| 6.2 | Génération TTS + playback (2 scénarios : saturation critique, intrusion hors horaires) | Appel réel reçu |
 | 6.3 | Statut d'appel (terminé / en cours / échoué) dans le panneau Qt | Panel à jour |
 | 6.4 | Double canal humain/machine : message vocal + JSON conservé (F15) | Corrélation alerte ↔ appel |
 
@@ -295,7 +282,7 @@ APPL Qt  ──► processing ──► alertes ──► exports CSV/PDF
 | # | Tâche | Validation |
 | :--- | :--- | :--- |
 | 7.1 | Calibration in situ (F18) : ground truth 30 min + régression + lookup table Qt | Courbe calibrée |
-| 7.2 | Tests bout-en-bout : flux réel, intrusion, évacuation complète | Scénario complet |
+| 7.2 | Tests bout-en-bout : flux réel, intrusion, saturation | Scénario complet |
 | 7.3 | Tests non-fonctionnels : latence, reconnexion, panne nœud, débit MQTT | Critères OK |
 | 7.4 | Documentation, rapport, démo jury | Présentation prête |
 

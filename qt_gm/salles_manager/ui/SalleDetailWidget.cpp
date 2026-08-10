@@ -222,13 +222,17 @@ void SalleDetailWidget::afficher(const Salle& salle)
     m_sorties->setText(QString::number(salle.nbSorties));
     m_infos->setText(
         QStringLiteral("Capacité : %1 personnes   |   Densité : %2   |   Horaires : %3 - %4\n"
-                       "Hauteur porte : %5")
+                       "Hauteur porte : %5   |   Personnes estimées : %6 (régime %7)")
             .arg(salle.capacite)
             .arg(salle.densite, 0, 'f', 2)
             .arg(salle.horaireDebut, salle.horaireFin)
             .arg(salle.hauteurPorteMesuree
                      ? QStringLiteral("%1 cm").arg(salle.hauteurPorteCm, 0, 'f', 1)
-                     : QStringLiteral("non mesurée")));
+                     : QStringLiteral("non mesurée"))
+            .arg(salle.nbPersonnesEstime >= 0
+                     ? QString::number(salle.nbPersonnesEstime)
+                     : QStringLiteral("—"))
+            .arg(salle.regime));
 
     const bool horsLigne = !salle.enLigne && !salle.enAttente;
     if (horsLigne || salle.occupation < 0) {

@@ -1,6 +1,6 @@
-# i++ v4.0 — Système Distribué de Gestion de Flux et d'Aide à l'Évacuation Sécurisée pour ERP
+# i++ v4.0 — Système Distribué de Gestion de Flux et de Sécurité pour ERP
 
-> Système embarqué de supervision de flux piétonnier, de détection multimodale d'anomalies et d'alerte vocale centralisée, conçu pour le déploiement dans les Établissements Recevant du Public (universités, grands bâtiments). Intégration PBX Asterisk pour notifications téléphoniques et guidage vocal. Audio entièrement centralisé sur le poste de supervision.
+> Système embarqué de supervision de flux piétonnier, de détection d'anomalies et d'alerte vocale centralisée, conçu pour le déploiement dans les Établissements Recevant du Public (universités, grands bâtiments). Intégration PBX Asterisk pour notifications téléphoniques et guidage vocal. Audio entièrement centralisé sur le poste de supervision.
 
 **Auteurs :** ANDRIANANTENAINA Fabien Toky Fandresena, RAKOTONDRASOA Joharimisa  
 **Établissement :** Université d'Antananarivo — Mention MIT (MISA)
@@ -12,7 +12,7 @@
 - [Vue d'ensemble](#vue-densemble)
 - [Matériel Embarqué par Nœud](#matériel-embarqué-par-nœud)
 - [Fonctionnalités de Base](#fonctionnalités-de-base)
-- [Fonctionnalités Avancées Sécurité & Évacuation](#fonctionnalités-avancées-sécurité--évacuation)
+- [Fonctionnalités Avancées Sécurité](#fonctionnalités-avancées-sécurité)
 - [Intégration Asterisk & Guidage Vocal Centralisé](#intégration-asterisk--guidage-vocal-centralisé)
 - [Gestion Multi-Personnes : Estimation de Densité](#gestion-multi-personnes--estimation-de-densité)
 - [Architecture Système](#architecture-système)
@@ -75,22 +75,10 @@ LCD 16x2 affiche localement : statut boîtier (en ligne/hors ligne), état capte
 
 ---
 
-## Fonctionnalités Avancées Sécurité & Évacuation
+## Fonctionnalités Avancées Sécurité
 
-### 9 — Mode Évacuation Active
-En cas d'alerte confirmée (incendie, bousculade), chaque boîtier bascule en mode évacuation prioritaire :
-- LCD 16x2 affiche message texte "EVACUATION →" avec flèches statiques
-- Dashboard Qt calcule taux d'évacuation réel via capteurs A-B et alerte si personnes bloquées au-delà seuil configurable
-- Guidage vocal et alarme sonore émis **uniquement depuis l'ordinateur central** (Asterisk/TTS)
-
-### 10 — Détection Multimodale de Bousculade
-Détection par corrélation temporelle de signaux hétérogènes disponibles : VL53L0X (densité/surface), HC-SR04 (flux directionnel), INMP441 (signature acoustique), SHT4x (gradient thermique). Aucune alerte déclenchée sur un seul capteur isolé, éliminant faux positifs.
-
-### 11 — Détection d'Intrusion Hors Horaires
+### 9 — Détection d'Intrusion Hors Horaires
 Présence détectée hors planning autorisé par système A-B → alerte intrusion confirmée après temporisation anti-rebond algorithmique. Appel Asterisk vers agent de sécurité avec localisation précise. L'intrusion est définie uniquement par présence hors horaires autorisés (NFC supprimé).
-
-### 12 — Surveillance Personne Immobilisée
-Occupation stable > 0 (système A-B) avec variance capteur ToF ≈ 0 pendant durée anormale → alerte malaise/personne bloquée. Appel Asterisk vers infirmerie/secours.
 ---
 
 ## Intégration Asterisk & Guidage Vocal Centralisé
@@ -102,10 +90,8 @@ Passerelle voix/SIP sécurisée, jamais exposée directement au réseau IoT. Bac
 
 | Type d'Alerte | Définition Algorithmique | Destinataire | Message TTS Généré |
 | :--- | :--- | :--- | :--- |
-| Bousculade confirmée | Score fusion (ToF+Audio+Thermique) > seuil haut > 2s | Responsable sécurité | *"Bousculade détectée salle B204, évacuation en cours, 47 personnes présentes"* |
 | Saturation critique | ≥ 95% capacité > 3 min continu | Gestionnaire bâtiment | *"Saturation critique amphithéâtre A, 312/300 personnes depuis 4 minutes"* |
 | Intrusion hors horaires | Occupation > 0 hors planning > 2 min | Agent surveillance | *"Intrusion non autorisée salle TP3, heure 03h17"* |
-| Personne immobilisée | Variance ToF < seuil bas > 5 min horaire normal | Infirmerie / Secours | *"Personne immobile couloir Est depuis 6 minutes, intervention requise"* |
 | Nœud suspect réseau | > 5 échecs HMAC/min OU valeurs impossibles | Admin IT | *"Anomalie cybersécurité nœud Salle-C12, perte intégrité données"* |
 
 ### Guidage Vocal Centralisé

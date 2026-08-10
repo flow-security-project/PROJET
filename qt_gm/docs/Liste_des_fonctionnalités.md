@@ -19,12 +19,10 @@ L'ordre ci-dessous suit les dépendances techniques et l'importance opérationne
 
 ---
 
-### Fonctionnalités Avancées Sécurité & Évacuation
+### Fonctionnalités Avancées Sécurité
 
 | # | Fonctionnalité | Description Technique |
 | :--- | :--- | :--- |
-| F9 | Mode Évacuation Active Automatique | Déclenchement **automatique sans bouton** quand ≥2 des 3 critères suivants sont satisfaits pendant 3 secondes :<br>• **Audio foule** : INMP441 RMS > percentile_99 historique + bande 800-3000Hz dominante<br>• **Montée thermique** : SHT4x dT/dt > 2°C/min<br>• **Saturation surface porte** : VL53L0X densité ≥95% + flux sortant anormal<br>**Actions** : LED RGB rouge clignotant rapide, LCD "EVACUATION →", guidage vocal via Asterisk depuis PC, calcul taux d’évacuation backend. |
-| F10 | Détection Multimodale de Bousculade | Fusion temporelle des signaux VL53L0X (densité), HC-SR04 (flux directionnel), INMP441 (acoustique), SHT4x (thermique). Alerte déclenchée uniquement si corrélation ≥2 capteurs. Score de confiance affiché dans Qt. |
 | F11 | Détection Intrusion Hors Horaires | Présence détectée par le système A-B en dehors des plages horaires autorisées pendant >2 minutes → alerte intrusion. Appel Asterisk vers agent de sécurité avec localisation précise. |
 
 ---
@@ -33,7 +31,7 @@ L'ordre ci-dessous suit les dépendances techniques et l'importance opérationne
 
 | # | Fonctionnalité | Description Technique |
 | :--- | :--- | :--- |
-| F13 | Appels Automatiques Structurés | Le backend communique avec Asterisk via l’API ARI pour 4 scénarios : bousculade, saturation critique, intrusion, personne immobilisée. Message TTS généré automatiquement. Statut de l’appel visible dans le panneau alertes Qt. |
+| F13 | Appels Automatiques Structurés | Le backend communique avec Asterisk via l’API ARI pour 2 scénarios : saturation critique, intrusion hors horaires. Message TTS généré automatiquement. Statut de l’appel visible dans le panneau alertes Qt. |
 | F14 | Guidage Vocal Centralisé | Toute la synthèse vocale et l’alarme sonore sont émises **exclusivement depuis l’ordinateur central** via Asterisk/TTS. Aucun module audio ni buzzer sur les boîtiers embarqués. Qualité professionnelle, maintenance simplifiée, accessibilité PMR. |
 | F15 | Double Canal Humain/Machine | Chaque alerte Asterisk transmet un message vocal humain ET des données JSON structurées conservées côté backend pour analyse post-incident. Corrélation directe alerte ↔ appel dans Qt. |
 
@@ -51,12 +49,12 @@ L'ordre ci-dessous suit les dépendances techniques et l'importance opérationne
 
 ### Résumé pour Présentation Jury
 
-> **i++ v4.0 comporte 19 fonctionnalités** organisées en 4 axes :  
+> **i++ v4.0 comporte 16 fonctionnalités** organisées en 4 axes :  
 > 1. **Supervision opérationnelle** (F1-F8) : monitoring temps réel, configuration, historique  
-> 2. **Sécurité active autonome** (F9-F12) : évacuation automatique multimodale sans bouton, détection anomalies par fusion capteurs  
+> 2. **Sécurité active autonome** (F11) : détection d'intrusion hors horaires avec appel automatique  
 > 3. **Alerte vocale centralisée** (F13-F15) : Asterisk intégré, guidage vocal PC-only, traçabilité appels  
 > 4. **Intelligence de flux** (F16-F19) : système A-B directionnel, estimation densité calibrée, transparence métrologique  
 >   
-> **Matériel minimaliste** : 1 LED RGB + 5 capteurs/nœud. **Aucun bouton physique**. **Audio 100% centralisé**. **Déclenchement évacuation entièrement automatique par fusion multimodale**. Projet conçu comme système de sécurité critique et instrument de recherche pour ERP universitaires à budget contraint.
+> **Matériel minimaliste** : 1 LED RGB + 5 capteurs/nœud. **Aucun bouton physique**. **Audio 100% centralisé**. Projet conçu comme système de supervision de flux et instrument de recherche pour ERP universitaires à budget contraint.
 
 Cette version est propre, cohérente avec votre matériel réel, et prête à être intégrée dans votre rapport ou présentée au jury. Souhaitez-vous que je régénère le document Markdown complet avec ces 19 fonctionnalités ?

@@ -1,8 +1,11 @@
 #include "DemoSource.h"
 
+#include <algorithm>
+
 #include <QDateTime>
 #include <QRandomGenerator>
 
+#include "engine/densite/DensiteEstimator.h"
 #include "models/Alerte.h"
 
 DemoSource::DemoSource(QObject* parent)
@@ -10,6 +13,11 @@ DemoSource::DemoSource(QObject* parent)
 {
     m_timer.setInterval(1000);
     connect(&m_timer, &QTimer::timeout, this, &DemoSource::onTick);
+}
+
+DemoSource::~DemoSource()
+{
+    qDeleteAll(m_densite);
 }
 
 void DemoSource::start()
@@ -42,6 +50,14 @@ void DemoSource::creerSalle(const Salle& salle)
     s.occupation = 0;
     s.densite = 0.0;
     s.pushHistorique();
+
+    auto* estimateur = new DensiteEstimator();
+    if (s.hauteurPorteMesuree && s.hauteurPorteCm > 0.0)
+        estimateur->setHauteurPorteCm(s.hauteurPorteCm);
+    else
+        estimateur->setHauteurPorteCm(210.0);
+    m_densite.insert(s.id, estimateur);
+
     m_salles.insert(s.id, s);
     emit salleAjoutee(s.id);
     emit logAppend(QStringLiteral("SALLE créée — %1 (%2)").arg(s.id, s.nom));
@@ -58,6 +74,7 @@ void DemoSource::modifierSalle(const Salle& salle)
     const Salle previous = m_salles.value(salle.id);
     updated.occupation = previous.occupation;
     updated.densite = previous.densite;
+    updated.nbPersonnesEstime = previous.nbPersonnesEstime;
     updated.tendance = previous.tendance;
     updated.nbEntrees = previous.nbEntrees;
     updated.nbSorties = previous.nbSorties;
@@ -70,6 +87,10 @@ void DemoSource::modifierSalle(const Salle& salle)
     updated.derniereAlerteFluxSortieMs = previous.derniereAlerteFluxSortieMs;
     updated.enLigne = true;
     updated.enAttente = false;
+    if (m_densite.contains(updated.id) && updated.hauteurPorteMesuree
+        && updated.hauteurPorteCm > 0.0) {
+        m_densite[updated.id]->setHauteurPorteCm(updated.hauteurPorteCm);
+    }
     m_salles.insert(updated.id, updated);
     emit salleMiseAJour(updated.id);
     emit logAppend(QStringLiteral("CONFIGURATION modifiée — %1").arg(updated.id));
@@ -84,6 +105,10 @@ void DemoSource::supprimerSalle(const QString& id)
 
     m_salles.remove(id);
     m_fluxAccum.remove(id);
+    m_dernierTofMs.remove(id);
+    m_presenceToF.remove(id);
+    if (auto* estimateur = m_densite.take(id))
+        delete estimateur;
     emit salleSupprimee(id);
     emit logAppend(QStringLiteral("SALLE supprimée — %1").arg(id));
 }
@@ -103,6 +128,8 @@ void DemoSource::getHauteurPorte(const QString& salleId)
             Salle& s = m_salles[salleId];
             s.hauteurPorteCm = valeur;
             s.hauteurPorteMesuree = true;
+            if (m_densite.contains(salleId))
+                m_densite[salleId]->setHauteurPorteCm(valeur);
             emit salleMiseAJour(salleId);
         }
         emit hauteurPorteMesuree(salleId, valeur, true,
@@ -181,13 +208,58 @@ void DemoSource::onTick()
                                .arg(s.id, a.detail));
         }
 
-        s.densite = s.taux();
         s.tendance = flux;
-        s.regime = s.occupation >= 3 ? QStringLiteral("surface")
-                                     : QStringLiteral("clustering");
-        s.confiance = 0.80 + double((m_tick + int(hash)) % 15) / 100.0;
+        simulerTof(s, QDateTime::currentMSecsSinceEpoch());
         s.mettreAJourAnticipation();
         s.pushHistorique();
         emit salleMiseAJour(s.id);
     }
+}
+
+void DemoSource::simulerTof(Salle& salle, qint64 maintenantMs)
+{
+    DensiteEstimator* estimateur = m_densite.value(salle.id);
+    if (!estimateur)
+        return;
+
+    const double hauteurMm = salle.hauteurPorteMesuree && salle.hauteurPorteCm > 0.0
+                                 ? salle.hauteurPorteCm * 10.0
+                                 : 2100.0;
+    const double presenceProb = std::clamp(double(salle.occupation) / 3.0, 0.0, 1.0);
+
+    // Persistance de présence : passages de ~1-2 s, pas de grésillement
+    bool& actif = m_presenceToF[salle.id];
+    const double aleaEtat
+        = double(QRandomGenerator::global()->bounded(1000)) / 1000.0;
+    if (actif) {
+        if (aleaEtat > 0.80)
+            actif = false; // fin du passage
+    } else if (aleaEtat < presenceProb) {
+        actif = true;      // nouveau passage
+    }
+
+    const double plongeon = 900.0 + double(qMin(salle.occupation, 10)) * 60.0;
+
+    qint64& dernierT = m_dernierTofMs[salle.id];
+    if (dernierT == 0)
+        dernierT = maintenantMs - 4000;
+
+    for (int i = 0; i < 5; ++i) { // 5 Hz simulé
+        dernierT += 200;
+        double distanceMm = hauteurMm;
+        if (actif) {
+            distanceMm = hauteurMm - plongeon
+                         - double(QRandomGenerator::global()->bounded(201));
+        } else {
+            distanceMm = hauteurMm
+                         + double(QRandomGenerator::global()->bounded(61)) - 30.0;
+        }
+        estimateur->ajouterEchantillon(distanceMm, dernierT);
+    }
+
+    const DensiteEstimation est = estimateur->estimer(maintenantMs);
+    salle.densite = est.surface;
+    salle.regime = est.regime;
+    salle.confiance = est.confiance;
+    salle.nbPersonnesEstime = est.nbPersonnes;
 }
