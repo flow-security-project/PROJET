@@ -34,6 +34,7 @@ private:
     QLabel* m_titre = nullptr;
     QLabel* m_statut = nullptr;
     QLabel* m_alerteFlux = nullptr;
+    QLabel* m_alerteIntrusion = nullptr;
     QListWidget* m_alerteListe = nullptr;
     QLabel* m_occupation = nullptr;
     QLabel* m_taux = nullptr;

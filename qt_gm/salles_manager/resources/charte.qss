@@ -695,6 +695,16 @@ QLabel#alerteFluxBadge {
     font-weight: 700;
 }
 
+QLabel#alerteIntrusionBadge {
+    background: #FBE9E7;
+    color: #C62828;
+    border: 1px solid #FFCCBC;
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
 /* ============================================================
    ÉTATS / RETOURS UTILISATEUR
    ============================================================ */

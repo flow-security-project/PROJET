@@ -20,6 +20,9 @@ qt_add_executable(salles_manager
     engine/densite/DensiteEstimator.h
     engine/densite/DensiteEstimator.cpp
 
+    engine/securite/IntrusionDetector.h
+    engine/securite/IntrusionDetector.cpp
+
     data/DataSource.h
     data/DataSource.cpp
     data/DemoSource.h

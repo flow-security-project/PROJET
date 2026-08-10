@@ -6,6 +6,7 @@
 #include <QRandomGenerator>
 
 #include "engine/densite/DensiteEstimator.h"
+#include "engine/securite/IntrusionDetector.h"
 #include "models/Alerte.h"
 
 DemoSource::DemoSource(QObject* parent)
@@ -18,6 +19,7 @@ DemoSource::DemoSource(QObject* parent)
 DemoSource::~DemoSource()
 {
     qDeleteAll(m_densite);
+    qDeleteAll(m_intrusion);
 }
 
 void DemoSource::start()
@@ -58,6 +60,10 @@ void DemoSource::creerSalle(const Salle& salle)
         estimateur->setHauteurPorteCm(210.0);
     m_densite.insert(s.id, estimateur);
 
+    auto* detecteur = new IntrusionDetector();
+    detecteur->setHoraires(s.horaireDebut, s.horaireFin);
+    m_intrusion.insert(s.id, detecteur);
+
     m_salles.insert(s.id, s);
     emit salleAjoutee(s.id);
     emit logAppend(QStringLiteral("SALLE créée — %1 (%2)").arg(s.id, s.nom));
@@ -85,12 +91,16 @@ void DemoSource::modifierSalle(const Salle& salle)
     updated.fluxSortieHist = previous.fluxSortieHist;
     updated.fluxSortieAnormal = previous.fluxSortieAnormal;
     updated.derniereAlerteFluxSortieMs = previous.derniereAlerteFluxSortieMs;
+    updated.intrusionActive = previous.intrusionActive;
+    updated.intrusionDureeS = previous.intrusionDureeS;
     updated.enLigne = true;
     updated.enAttente = false;
     if (m_densite.contains(updated.id) && updated.hauteurPorteMesuree
         && updated.hauteurPorteCm > 0.0) {
         m_densite[updated.id]->setHauteurPorteCm(updated.hauteurPorteCm);
     }
+    if (m_intrusion.contains(updated.id))
+        m_intrusion[updated.id]->setHoraires(updated.horaireDebut, updated.horaireFin);
     m_salles.insert(updated.id, updated);
     emit salleMiseAJour(updated.id);
     emit logAppend(QStringLiteral("CONFIGURATION modifiée — %1").arg(updated.id));
@@ -109,6 +119,8 @@ void DemoSource::supprimerSalle(const QString& id)
     m_presenceToF.remove(id);
     if (auto* estimateur = m_densite.take(id))
         delete estimateur;
+    if (auto* detecteur = m_intrusion.take(id))
+        delete detecteur;
     emit salleSupprimee(id);
     emit logAppend(QStringLiteral("SALLE supprimée — %1").arg(id));
 }
@@ -151,7 +163,7 @@ void DemoSource::onTick()
     for (auto it = m_salles.begin(); it != m_salles.end(); ++it) {
         Salle& s = it.value();
         const uint hash = qHash(s.id);
-        const int scenario = int(hash) % 5;
+        const int scenario = int(hash) % 6;
 
         double flux = 0.0; // pers/min cible selon le scénario
         switch (scenario) {
@@ -166,6 +178,11 @@ void DemoSource::onTick()
                 flux = -240.0;
             else
                 flux = 0.3;
+            break;
+        case 5:                                 // présence permanente (F11 intrusion)
+            flux = 0.4;
+            if (s.occupation < 1)
+                s.occupation = 1;
             break;
         }
         if (s.occupation >= s.capacite)
@@ -209,11 +226,47 @@ void DemoSource::onTick()
         }
 
         s.tendance = flux;
+        verifierIntrusion(s.id, QDateTime::currentMSecsSinceEpoch());
         simulerTof(s, QDateTime::currentMSecsSinceEpoch());
         s.mettreAJourAnticipation();
         s.pushHistorique();
         emit salleMiseAJour(s.id);
     }
+}
+
+void DemoSource::verifierIntrusion(const QString& salleId, qint64 maintenantMs)
+{
+    if (!m_salles.contains(salleId) || !m_intrusion.contains(salleId))
+        return;
+
+    Salle& s = m_salles[salleId];
+    const bool presence = s.occupation > 0;
+    const IntrusionResultat resultat = m_intrusion[salleId]->verifier(presence, maintenantMs);
+    s.intrusionActive = resultat.intrusionActive;
+    s.intrusionDureeS = resultat.dureeS;
+    if (!resultat.nouvelleAlerte)
+        return;
+
+    const QString heureActuelle
+        = QDateTime::fromMSecsSinceEpoch(maintenantMs).toString(QStringLiteral("HH:mm"));
+    const int minutes = int(resultat.dureeS) / 60;
+    const int secondes = int(resultat.dureeS) % 60;
+
+    Alerte a;
+    a.salleId = s.id;
+    a.salleNom = s.nom;
+    a.type = QStringLiteral("intrusion");
+    a.capteurs = {QStringLiteral("HC-SR04"), QStringLiteral("VL53L0X")};
+    a.detail = QStringLiteral(
+        "Présence détectée hors horaires autorisés (%1-%2) — "
+        "présence depuis %3 min %4 s, horaire %5")
+                   .arg(s.horaireDebut, s.horaireFin)
+                   .arg(minutes)
+                   .arg(secondes)
+                   .arg(heureActuelle);
+    a.appelCible = QStringLiteral("Agent surveillance");
+    emit alerte(a);
+    emit logAppend(QStringLiteral("ALERTE F11 — %1 : %2").arg(s.id, a.detail));
 }
 
 void DemoSource::simulerTof(Salle& salle, qint64 maintenantMs)

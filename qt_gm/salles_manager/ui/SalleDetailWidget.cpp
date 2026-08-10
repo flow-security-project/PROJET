@@ -80,6 +80,10 @@ SalleDetailWidget::SalleDetailWidget(DataSource* source, const QString& salleId,
     m_alerteFlux->setObjectName(QStringLiteral("alerteFluxBadge"));
     m_alerteFlux->setVisible(false);
 
+    m_alerteIntrusion = new QLabel(this);
+    m_alerteIntrusion->setObjectName(QStringLiteral("alerteIntrusionBadge"));
+    m_alerteIntrusion->setVisible(false);
+
     // --- Historique alertes de la salle (Prototype §3) ---
     auto* alerteBox = new QGroupBox(QStringLiteral("HISTORIQUE ALERTES SALLE"), this);
     alerteBox->setObjectName(QStringLiteral("alerteHistoriqueCard"));
@@ -175,6 +179,7 @@ SalleDetailWidget::SalleDetailWidget(DataSource* source, const QString& salleId,
     layout->addLayout(kpis);
     layout->addWidget(m_infos);
     layout->addWidget(m_alerteFlux);
+    layout->addWidget(m_alerteIntrusion);
     layout->addWidget(anticipationBox);
     layout->addLayout(controls);
     layout->addWidget(m_plot, 1);
@@ -208,13 +213,25 @@ void SalleDetailWidget::afficher(const Salle& salle)
     m_titre->setText(salle.nom.isEmpty() ? salle.id
                                         : QStringLiteral("%1 (%2)").arg(salle.nom, salle.id));
     const QString level = salle.enAttente ? QStringLiteral("pending")
-                                          : salle.enLigne ? QStringLiteral("normal")
-                                                          : QStringLiteral("offline");
+                          : !salle.enLigne ? QStringLiteral("offline")
+                          : salle.intrusionActive ? QStringLiteral("critical")
+                                                  : QStringLiteral("normal");
     m_statut->setText(salle.statutTexte());
     m_statut->setProperty("level", level);
     m_statut->style()->unpolish(m_statut);
     m_statut->style()->polish(m_statut);
     m_alerteFlux->setVisible(salle.fluxSortieAnormal);
+    if (salle.intrusionActive) {
+        const int minutes = int(salle.intrusionDureeS) / 60;
+        const int secondes = int(salle.intrusionDureeS) % 60;
+        m_alerteIntrusion->setText(
+            QStringLiteral("INTRUSION HORS HORAIRES — présence détectée en dehors des "
+                           "horaires autorisés (%1-%2) depuis %3 min %4 s")
+                .arg(salle.horaireDebut, salle.horaireFin)
+                .arg(minutes)
+                .arg(secondes));
+    }
+    m_alerteIntrusion->setVisible(salle.intrusionActive);
     m_occupation->setText(QStringLiteral("%1").arg(salle.occupationTexte()));
     m_taux->setText(QStringLiteral("%1 %").arg(int(salle.taux() * 100.0)));
     m_debit->setText(QStringLiteral("%1 pers/min").arg(debitInstantane(salle), 0, 'f', 1));

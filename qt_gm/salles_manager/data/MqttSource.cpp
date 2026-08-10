@@ -9,6 +9,7 @@
 #include <QJsonParseError>
 
 #include "engine/densite/DensiteEstimator.h"
+#include "engine/securite/IntrusionDetector.h"
 #include "models/Alerte.h"
 
 MqttSource::MqttSource(QObject* parent)
@@ -31,6 +32,7 @@ MqttSource::MqttSource(QObject* parent)
 MqttSource::~MqttSource()
 {
     qDeleteAll(m_densite);
+    qDeleteAll(m_intrusion);
 }
 
 void MqttSource::start()
@@ -73,6 +75,7 @@ void MqttSource::creerSalle(const Salle& salle)
     pending.occupation = -1;
     m_salles.insert(pending.id, pending);
     preparerDensite(pending.id);
+    preparerSecurite(pending.id);
     emit salleAjoutee(pending.id);
     publierConfiguration(pending);
     emit logAppend(QStringLiteral("SALLE %1 créée localement — confirmation MQTT attendue")
@@ -101,8 +104,12 @@ void MqttSource::modifierSalle(const Salle& salle)
     updated.fluxSortieHist = previous.fluxSortieHist;
     updated.fluxSortieAnormal = previous.fluxSortieAnormal;
     updated.derniereAlerteFluxSortieMs = previous.derniereAlerteFluxSortieMs;
+    updated.intrusionActive = previous.intrusionActive;
+    updated.intrusionDureeS = previous.intrusionDureeS;
     updated.enAttente = true;
     m_salles.insert(updated.id, updated);
+    if (m_intrusion.contains(updated.id))
+        m_intrusion[updated.id]->setHoraires(updated.horaireDebut, updated.horaireFin);
     emit salleMiseAJour(updated.id);
     publierConfiguration(updated);
 }
@@ -118,6 +125,9 @@ void MqttSource::supprimerSalle(const QString& id)
     m_departTimes.remove(id);
     if (auto* estimateur = m_densite.take(id)) {
         delete estimateur;
+    }
+    if (auto* detecteur = m_intrusion.take(id)) {
+        delete detecteur;
     }
     emit salleSupprimee(id);
     emit logAppend(QStringLiteral("SALLE supprimée du dashboard — %1 "
@@ -277,6 +287,8 @@ void MqttSource::onMessage(const QString& topic, const QByteArray& payload)
                                  .toString(salle.horaireDebut);
         salle.horaireFin = horaires.value(QStringLiteral("fin"))
                                .toString(salle.horaireFin);
+        if (m_intrusion.contains(id))
+            m_intrusion[id]->setHoraires(salle.horaireDebut, salle.horaireFin);
         if (object.contains(QStringLiteral("hauteurPorte_cm"))) {
             salle.hauteurPorteCm = object.value(QStringLiteral("hauteurPorte_cm"))
                                        .toDouble(salle.hauteurPorteCm);
@@ -320,6 +332,7 @@ void MqttSource::onWatchdogTimeout()
             salle.mettreAJourAnticipation();
             salle.pushHistorique();
             verifierFluxSortie(salle.id);
+            verifierIntrusion(salle.id, maintenant);
             if (m_densite.contains(salle.id)) {
                 const DensiteEstimation est
                     = m_densite[salle.id]->estimer(maintenant);
@@ -417,6 +430,52 @@ void MqttSource::verifierFluxSortie(const QString& salleId)
                    .arg(detection.points);
     emit alerte(a);
     emit logAppend(QStringLiteral("ALERTE F3 — %1 : %2").arg(salle.id, a.detail));
+}
+
+void MqttSource::preparerSecurite(const QString& salleId)
+{
+    if (m_intrusion.contains(salleId))
+        return;
+
+    auto* detecteur = new IntrusionDetector();
+    const Salle& salle = m_salles.value(salleId);
+    detecteur->setHoraires(salle.horaireDebut, salle.horaireFin);
+    m_intrusion.insert(salleId, detecteur);
+}
+
+void MqttSource::verifierIntrusion(const QString& salleId, qint64 maintenantMs)
+{
+    if (!m_salles.contains(salleId) || !m_intrusion.contains(salleId))
+        return;
+
+    Salle& salle = m_salles[salleId];
+    const bool presence = salle.occupation > 0;
+    const IntrusionResultat resultat = m_intrusion[salleId]->verifier(presence, maintenantMs);
+    salle.intrusionActive = resultat.intrusionActive;
+    salle.intrusionDureeS = resultat.dureeS;
+    if (!resultat.nouvelleAlerte)
+        return;
+
+    const QString heureActuelle
+        = QDateTime::fromMSecsSinceEpoch(maintenantMs).toString(QStringLiteral("HH:mm"));
+    const int minutes = int(resultat.dureeS) / 60;
+    const int secondes = int(resultat.dureeS) % 60;
+
+    Alerte a;
+    a.salleId = salle.id;
+    a.salleNom = salle.nom;
+    a.type = QStringLiteral("intrusion");
+    a.capteurs = {QStringLiteral("HC-SR04"), QStringLiteral("VL53L0X")};
+    a.detail = QStringLiteral(
+        "Présence détectée hors horaires autorisés (%1-%2) — "
+        "présence depuis %3 min %4 s, horaire %5")
+                   .arg(salle.horaireDebut, salle.horaireFin)
+                   .arg(minutes)
+                   .arg(secondes)
+                   .arg(heureActuelle);
+    a.appelCible = QStringLiteral("Agent surveillance");
+    emit alerte(a);
+    emit logAppend(QStringLiteral("ALERTE F11 — %1 : %2").arg(salle.id, a.detail));
 }
 
 double MqttSource::mediane(QVector<double> valeurs)

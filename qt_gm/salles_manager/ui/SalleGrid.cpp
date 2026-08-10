@@ -251,6 +251,8 @@ void SalleGrid::mettreAJourCarte(const QString& id)
         base = QColor(QStringLiteral("#94A3B8"));
     } else if (salle.evacuationActive) {
         base = QColor(QStringLiteral("#B91C1C"));
+    } else if (salle.intrusionActive) {
+        base = QColor(QStringLiteral("#C62828"));
     } else {
         const double t = salle.taux();
         if (t >= 0.95)
@@ -287,6 +289,9 @@ void SalleGrid::mettreAJourCarte(const QString& id)
         level = QStringLiteral("offline");
     } else if (salle.evacuationActive) {
         statusText = QStringLiteral("ÉVACUATION");
+        level = QStringLiteral("critical");
+    } else if (salle.intrusionActive) {
+        statusText = QStringLiteral("INTRUSION");
         level = QStringLiteral("critical");
     } else if (critical) {
         statusText = QStringLiteral("CRITIQUE");

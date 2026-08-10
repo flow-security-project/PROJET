@@ -33,6 +33,8 @@ struct Salle
     QString regime = "clustering";
     double confiance = -1.0;
     bool evacuationActive = false;
+    bool intrusionActive = false;
+    double intrusionDureeS = 0.0;
     QString lcdLigne1;
     QString lcdLigne2;
 
@@ -169,6 +171,8 @@ struct Salle
             return QStringLiteral("HORS LIGNE");
         if (evacuationActive)
             return QStringLiteral("EVACUATION ACTIVE");
+        if (intrusionActive)
+            return QStringLiteral("INTRUSION ACTIVE");
         return QStringLiteral("EN LIGNE");
     }
 };

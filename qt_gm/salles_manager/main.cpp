@@ -104,7 +104,7 @@ static QString chercherIdScenario(int scenario, int nbEssais)
 {
     for (int i = 1; i <= nbEssais; ++i) {
         const QString candidat = QStringLiteral("A%1").arg(i, 3, 10, QLatin1Char('0'));
-        if (int(qHash(candidat)) % 5 == scenario)
+        if (int(qHash(candidat)) % 6 == scenario)
             return candidat;
     }
     return QString();
@@ -122,6 +122,7 @@ static void testAnticipation(MainWindow& window)
     auto* demo = new DemoSource(salles);
     const QString salleId = chercherIdScenario(1);  // montée rapide (anticipation)
     const QString salleBrusque = chercherIdScenario(4); // sortie brusque (F3)
+    const QString salleIntrusion = chercherIdScenario(5); // présence permanente (F11)
     Salle s;
     s.id = salleId;
     s.nom = QStringLiteral("Amphi Anticipation");
@@ -136,10 +137,18 @@ static void testAnticipation(MainWindow& window)
     b.horaireDebut = QStringLiteral("07:00");
     b.horaireFin = QStringLiteral("22:00");
     demo->creerSalle(b);
+    Salle intrusion;
+    intrusion.id = salleIntrusion;
+    intrusion.nom = QStringLiteral("Amphi Intrusion");
+    intrusion.capacite = 30;
+    // Plage autorisée réduite à 1 min à minuit : hors horaires presque toute la journée
+    intrusion.horaireDebut = QStringLiteral("00:00");
+    intrusion.horaireFin = QStringLiteral("00:01");
+    demo->creerSalle(intrusion);
     salles->setSource(demo);
-    qInfo() << "[TEST] salles creees:" << salleId << salleBrusque;
+    qInfo() << "[TEST] salles creees:" << salleId << salleBrusque << salleIntrusion;
 
-    QTimer::singleShot(800, [salleId, salleBrusque, salles]() {
+    QTimer::singleShot(800, [salleId, salleBrusque, salleIntrusion, salles]() {
         qInfo() << "[TEST] etape 1";
         auto* grid = salles->findChild<SalleGrid*>();
         if (!grid) {
@@ -168,7 +177,7 @@ static void testAnticipation(MainWindow& window)
                 break;
             }
         }
-        QTimer::singleShot(26000, [salleId, salleBrusque, salles]() {
+        QTimer::singleShot(26000, [salleId, salleBrusque, salleIntrusion, salles]() {
             qInfo() << "[TEST] etape 2";
             if (auto* demo = salles->findChild<DemoSource*>()) {
                 const Salle salle = demo->salles().value(salleId);
@@ -186,7 +195,7 @@ static void testAnticipation(MainWindow& window)
                 dialogue->grab().save(QStringLiteral("/tmp/opencode/detail_anticipation.png"));
             }
             salles->grab().save(QStringLiteral("/tmp/opencode/config_reseau.png"));
-            QTimer::singleShot(54000, [salleBrusque, salles]() {
+            QTimer::singleShot(54000, [salleBrusque, salleIntrusion, salles]() {
                 qInfo() << "[TEST] etape 3 (alerte F3)";
                 if (auto* demo = salles->findChild<DemoSource*>()) {
                     const Salle salle = demo->salles().value(salleBrusque);
@@ -218,11 +227,11 @@ static void testAnticipation(MainWindow& window)
                 }
                 for (QPushButton* bouton : salles->findChildren<QPushButton*>()) {
                     if (bouton->text() == QStringLiteral("Supprimer la salle")) {
-                        bouton->click();
+                        QTimer::singleShot(0, bouton, [bouton]() { bouton->click(); });
                         break;
                     }
                 }
-                QTimer::singleShot(400, [salleBrusque, salles]() {
+                QTimer::singleShot(400, [salleBrusque, salleIntrusion, salles]() {
                     if (auto* box = salles->findChild<QMessageBox*>()) {
                         qInfo() << "[TEST] confirmation presente";
                         box->grab().save(QStringLiteral("/tmp/opencode/suppr_confirmation.png"));
@@ -231,7 +240,7 @@ static void testAnticipation(MainWindow& window)
                     } else {
                         qInfo() << "[TEST] confirmation ABSENTE";
                     }
-                    QTimer::singleShot(600, [salleBrusque, salles]() {
+                    QTimer::singleShot(600, [salleBrusque, salleIntrusion, salles]() {
                         bool absent = true;
                         if (auto* demo = salles->findChild<DemoSource*>())
                             absent = !demo->salles().contains(salleBrusque);
@@ -246,7 +255,25 @@ static void testAnticipation(MainWindow& window)
                         qInfo() << "[TEST] salle supprimee du modele:" << absent
                                 << "carte retiree:" << carteAbsente;
                         salles->grab().save(QStringLiteral("/tmp/opencode/suppr_apres.png"));
-                        QCoreApplication::quit();
+                        QTimer::singleShot(45000, [salleIntrusion, salles]() {
+                            qInfo() << "[TEST] etape 5 (intrusion F11)";
+                            if (auto* demo = salles->findChild<DemoSource*>()) {
+                                const Salle salle = demo->salles().value(salleIntrusion);
+                                qInfo() << "[TEST] intrusionActive=" << salle.intrusionActive
+                                        << "duree_s=" << salle.intrusionDureeS
+                                        << "occupation=" << salle.occupation;
+                            }
+                            if (auto* modele = salles->findChild<AlerteModel*>()) {
+                                int nbIntrusion = 0;
+                                for (const Alerte& a : modele->alertes()) {
+                                    if (a.type == QStringLiteral("intrusion"))
+                                        ++nbIntrusion;
+                                }
+                                qInfo() << "[TEST] alertes intrusion dans le modèle:" << nbIntrusion;
+                            }
+                            salles->grab().save(QStringLiteral("/tmp/opencode/intrusion.png"));
+                            QCoreApplication::quit();
+                        });
                     });
                 });
             });

@@ -65,6 +65,30 @@ MainWindow::~MainWindow()
         m_salles->setSource(nullptr);
 }
 
+void MainWindow::changeEvent(QEvent* event)
+{
+    if (event->type() == QEvent::WindowStateChange && !m_basculePleinEcran) {
+        const Qt::WindowStates etat = windowState();
+        if (etat.testFlag(Qt::WindowMaximized)
+            && !etat.testFlag(Qt::WindowFullScreen)) {
+            m_etatAvantPleinEcran = etat;
+            m_basculePleinEcran = true;
+            showFullScreen();
+            m_basculePleinEcran = false;
+        }
+    }
+    QMainWindow::changeEvent(event);
+}
+
+void MainWindow::keyPressEvent(QKeyEvent* event)
+{
+    if (event->key() == Qt::Key_Escape && isFullScreen()) {
+        setWindowState(m_etatAvantPleinEcran);
+        return;
+    }
+    QMainWindow::keyPressEvent(event);
+}
+
 void MainWindow::onSourceChange()
 {
     auto* source = m_sourceBox->currentData().value<DataSource*>();

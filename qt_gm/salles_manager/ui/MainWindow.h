@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QEvent>
+#include <QKeyEvent>
 #include <QMainWindow>
 
 class QComboBox;
@@ -16,6 +18,10 @@ public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override;
 
+protected:
+    void changeEvent(QEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
+
 private slots:
     void onSourceChange();
     void connecterMqtt();
@@ -27,4 +33,6 @@ private:
     SallesWidget* m_salles = nullptr;
     DemoSource* m_demo = nullptr;
     MqttSource* m_mqtt = nullptr;
+    Qt::WindowStates m_etatAvantPleinEcran;
+    bool m_basculePleinEcran = false;
 };

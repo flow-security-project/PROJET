@@ -6,6 +6,7 @@
 #include "data/DataSource.h"
 
 class DensiteEstimator;
+class IntrusionDetector;
 
 class DemoSource : public DataSource
 {
@@ -30,11 +31,13 @@ private slots:
 
 private:
     void simulerTof(Salle& salle, qint64 maintenantMs);
+    void verifierIntrusion(const QString& salleId, qint64 maintenantMs);
 
     QTimer m_timer;
     int m_tick = 0;
     QHash<QString, double> m_fluxAccum;
     QHash<QString, DensiteEstimator*> m_densite;
+    QHash<QString, IntrusionDetector*> m_intrusion;
     QHash<QString, qint64> m_dernierTofMs;
     QHash<QString, bool> m_presenceToF;
 };
