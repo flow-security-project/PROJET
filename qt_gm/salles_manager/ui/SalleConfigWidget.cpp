@@ -25,6 +25,12 @@ SalleConfigWidget::SalleConfigWidget(QWidget* parent)
     m_titre = new QLabel(this);
     m_titre->setObjectName(QStringLiteral("configTitle"));
 
+    m_choixMode = new QComboBox(this);
+    m_choixMode->addItem(QStringLiteral("Salle indépendante (MULTI-MARKET)"),
+                         static_cast<int>(ModeFlux::Multi));
+    m_choixMode->addItem(QStringLiteral("Stade de portails (UNI-MARKET)"),
+                         static_cast<int>(ModeFlux::Uni));
+
     m_id = new QLineEdit(this);
     m_id->setPlaceholderText(QStringLiteral("Ex. B204"));
     m_nom = new QLineEdit(this);
@@ -36,6 +42,10 @@ SalleConfigWidget::SalleConfigWidget(QWidget* parent)
     m_seuilEvacuation->setRange(1, 100);
     m_seuilEvacuation->setValue(95);
     m_seuilEvacuation->setSuffix(QStringLiteral(" %"));
+    m_seuilEcart = new QSpinBox(this);
+    m_seuilEcart->setRange(1, 90);
+    m_seuilEcart->setValue(15);
+    m_seuilEcart->setSuffix(QStringLiteral(" %"));
     m_debut = new QDateTimeEdit(this);
     m_debut->setDisplayFormat(QStringLiteral("hh:mm"));
     m_debut->setTime(QTime(7, 0));
@@ -48,22 +58,31 @@ SalleConfigWidget::SalleConfigWidget(QWidget* parent)
     m_hauteur->setPlaceholderText(QStringLiteral("Mesure obligatoire"));
     m_boutonMesure = new QPushButton(QStringLiteral("Mesurer la hauteur de porte"), this);
 
+    m_groupeBadge = new QLabel(this);
+    m_groupeBadge->setObjectName(QStringLiteral("groupeBadge"));
+    m_groupeBadge->setWordWrap(true);
+    m_groupeBadge->hide();
+
     auto* form = new QFormLayout;
     form->setLabelAlignment(Qt::AlignRight);
+    form->addRow(QStringLiteral("Mode de flux"), m_choixMode);
     form->addRow(QStringLiteral("Identifiant"), m_id);
     form->addRow(QStringLiteral("Nom"), m_nom);
     form->addRow(QStringLiteral("Capacité"), m_capacite);
     form->addRow(QStringLiteral("Seuil évacuation"), m_seuilEvacuation);
+    form->addRow(QStringLiteral("Écart de redirection"), m_seuilEcart);
     form->addRow(QStringLiteral("Ouverture"), m_debut);
     form->addRow(QStringLiteral("Fermeture"), m_fin);
     form->addRow(QStringLiteral("Hauteur mesurée"), m_hauteur);
     form->addRow(QString(), m_boutonMesure);
+    m_form = form;
 
     auto* configuration = new QGroupBox(QStringLiteral("Création et configuration"), this);
     configuration->setObjectName(QStringLiteral("configCard"));
     auto* configurationLayout = new QVBoxLayout(configuration);
     configurationLayout->setContentsMargins(10, 12, 10, 10);
-    configurationLayout->addLayout(form);
+    configurationLayout->addWidget(m_groupeBadge);
+    configurationLayout->addLayout(m_form);
 
     m_boutonPrincipal = new QPushButton(this);
     m_boutonPrincipal->setObjectName(QStringLiteral("btnPrimaire"));
@@ -135,6 +154,12 @@ SalleConfigWidget::SalleConfigWidget(QWidget* parent)
         emit mesureDemandee(id);
     });
     connect(m_boutonPrincipal, &QPushButton::clicked, this, [this]() {
+        if (m_modeCreation && m_choixMode->currentData().toInt()
+                                  == static_cast<int>(ModeFlux::Uni)
+            && m_groupeVerrouille.isEmpty()) {
+            emit groupeCreerDemande(lireGroupeFormulaire());
+            return;
+        }
         const Salle salle = lireFormulaire();
         if (m_modeCreation)
             emit creerDemandee(salle);
@@ -160,6 +185,9 @@ SalleConfigWidget::SalleConfigWidget(QWidget* parent)
         if (!id.isEmpty())
             emit restaurationDemandee(id);
     });
+    connect(m_choixMode, &QComboBox::currentIndexChanged, this, [this](int) {
+        actualiserModeFlux();
+    });
 
     const QList<QWidget*> fields = {m_id, m_nom, m_capacite, m_seuilEvacuation,
                                     m_debut, m_fin};
@@ -182,6 +210,9 @@ void SalleConfigWidget::afficherCreation()
 {
     setModeCreation(true);
     m_salleId.clear();
+    m_groupeVerrouille.clear();
+    m_groupeBadge->hide();
+    m_choixMode->setCurrentIndex(0);
     m_id->clear();
     m_id->setReadOnly(false);
     m_nom->clear();
@@ -193,6 +224,20 @@ void SalleConfigWidget::afficherCreation()
     m_hauteurMesuree = false;
     m_hauteur->clear();
     afficherInfo(QStringLiteral("Saisissez les paramètres puis mesurez la hauteur de porte."));
+}
+
+void SalleConfigWidget::afficherCreationDansGroupe(const QString& groupeId,
+                                                   const QString& groupeNom,
+                                                   ModeFlux mode)
+{
+    afficherCreation();
+    m_groupeVerrouille = groupeId;
+    m_choixMode->setCurrentIndex(static_cast<int>(mode));
+    m_groupeBadge->setText(QStringLiteral("Porte du stade « %1 » (%2) — liaison automatique")
+                               .arg(groupeNom, groupeId));
+    m_groupeBadge->show();
+    m_choixMode->setVisible(false);
+    actualiserModeFlux();
 }
 
 void SalleConfigWidget::afficherSalle(const Salle& salle)
@@ -327,25 +372,69 @@ Salle SalleConfigWidget::lireFormulaire() const
     salle.horaireFin = m_fin->time().toString(QStringLiteral("hh:mm"));
     salle.hauteurPorteCm = m_hauteurCm;
     salle.hauteurPorteMesuree = m_hauteurMesuree;
+    salle.groupeId = m_groupeVerrouille;
+    salle.modeFlux = m_choixMode->currentData().toInt() == static_cast<int>(ModeFlux::Uni)
+                         ? ModeFlux::Uni
+                         : ModeFlux::Multi;
     return salle;
+}
+
+Groupe SalleConfigWidget::lireGroupeFormulaire() const
+{
+    Groupe groupe;
+    groupe.id = m_id->text().trimmed();
+    groupe.nom = m_nom->text().trimmed();
+    groupe.mode = ModeFlux::Uni;
+    groupe.seuilEcart = double(m_seuilEcart->value()) / 100.0;
+    return groupe;
 }
 
 void SalleConfigWidget::actualiserEtatBoutons()
 {
     const bool idOk = !m_id->text().trimmed().isEmpty();
     const bool nomOk = !m_nom->text().trimmed().isEmpty();
+    const bool creationStade = m_modeCreation
+                               && m_choixMode->currentData().toInt()
+                                      == static_cast<int>(ModeFlux::Uni)
+                               && m_groupeVerrouille.isEmpty();
     const bool horairesOk = m_debut->time() < m_fin->time();
-    const bool heightOk = m_hauteurMesuree && m_hauteurCm > 0.0;
+    const bool heightOk = creationStade || (m_hauteurMesuree && m_hauteurCm > 0.0);
     m_boutonPrincipal->setEnabled(idOk && nomOk && horairesOk && heightOk);
+}
+
+void SalleConfigWidget::actualiserModeFlux()
+{
+    const bool stade = m_choixMode->currentData().toInt()
+                       == static_cast<int>(ModeFlux::Uni);
+    const bool creationStade = stade && m_groupeVerrouille.isEmpty();
+    const bool champsSalle = !creationStade;
+    m_form->setRowVisible(m_capacite, champsSalle);
+    m_form->setRowVisible(m_seuilEvacuation, champsSalle);
+    m_form->setRowVisible(m_seuilEcart, creationStade);
+    m_form->setRowVisible(m_debut, champsSalle);
+    m_form->setRowVisible(m_fin, champsSalle);
+    m_form->setRowVisible(m_hauteur, champsSalle);
+    m_form->setRowVisible(m_boutonMesure, champsSalle);
+    if (m_modeCreation && m_groupeVerrouille.isEmpty()) {
+        m_titre->setText(creationStade ? QStringLiteral("Créer un stade de portails")
+                                       : QStringLiteral("Créer une salle"));
+        m_boutonPrincipal->setText(creationStade
+                                       ? QStringLiteral("Créer le stade")
+                                       : QStringLiteral("Créer la salle"));
+    }
+    actualiserEtatBoutons();
 }
 
 void SalleConfigWidget::setModeCreation(bool creation)
 {
     m_modeCreation = creation;
-    m_titre->setText(creation ? QStringLiteral("Créer une salle")
-                              : QStringLiteral("Salle sélectionnée"));
-    m_boutonPrincipal->setText(creation ? QStringLiteral("Créer la salle")
-                                        : QStringLiteral("Enregistrer la configuration"));
+    if (creation) {
+        m_choixMode->setVisible(m_groupeVerrouille.isEmpty());
+    } else {
+        m_choixMode->setVisible(false);
+        m_titre->setText(QStringLiteral("Salle sélectionnée"));
+        m_boutonPrincipal->setText(QStringLiteral("Enregistrer la configuration"));
+    }
     m_id->setReadOnly(!creation);
     m_boutonNouveau->setVisible(!creation);
     m_boutonActualiser->setVisible(!creation);
@@ -353,5 +442,5 @@ void SalleConfigWidget::setModeCreation(bool creation)
     m_boutonSupprimer->setVisible(!creation);
     m_boutonCourbe->setVisible(!creation);
     m_reseauBox->setVisible(!creation);
-    actualiserEtatBoutons();
+    actualiserModeFlux();
 }

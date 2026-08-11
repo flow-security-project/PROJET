@@ -4,10 +4,12 @@
 #include <QStringList>
 #include <QWidget>
 
+#include "models/Groupe.h"
 #include "models/Salle.h"
 
 class QComboBox;
 class QDateTimeEdit;
+class QFormLayout;
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -22,6 +24,8 @@ public:
 
     void afficherCreation();
     void afficherSalle(const Salle& salle);
+    void afficherCreationDansGroupe(const QString& groupeId, const QString& groupeNom,
+                                    ModeFlux mode);
     void afficherStatutReseau(const Salle& salle);
     void afficherMesure(const QString& id, double centimetres,
                         bool succes, const QString& note);
@@ -32,6 +36,7 @@ public:
 
 signals:
     void creerDemandee(const Salle& salle);
+    void groupeCreerDemande(const Groupe& groupe);
     void modificationDemandee(const Salle& salle);
     void mesureDemandee(const QString& id);
     void actualisationDemandee(const QString& id);
@@ -43,13 +48,17 @@ signals:
 
 private:
     Salle lireFormulaire() const;
+    Groupe lireGroupeFormulaire() const;
     void actualiserEtatBoutons();
     void setModeCreation(bool creation);
+    void actualiserModeFlux();
 
+    QComboBox* m_choixMode = nullptr;
     QLineEdit* m_id = nullptr;
     QLineEdit* m_nom = nullptr;
     QSpinBox* m_capacite = nullptr;
     QSpinBox* m_seuilEvacuation = nullptr;
+    QSpinBox* m_seuilEcart = nullptr;
     QDateTimeEdit* m_debut = nullptr;
     QDateTimeEdit* m_fin = nullptr;
     QLineEdit* m_hauteur = nullptr;
@@ -67,8 +76,11 @@ private:
     QLabel* m_reseauBadge = nullptr;
     QLabel* m_reseauDetail = nullptr;
     QWidget* m_reseauBox = nullptr;
+    QLabel* m_groupeBadge = nullptr;
+    QFormLayout* m_form = nullptr;
 
     QString m_salleId;
+    QString m_groupeVerrouille;
     double m_hauteurCm = -1.0;
     bool m_hauteurMesuree = false;
     bool m_modeCreation = true;

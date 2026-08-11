@@ -1,9 +1,11 @@
 #pragma once
 
+#include <QHash>
 #include <QPointer>
 #include <QWidget>
 
 #include "models/Alerte.h"
+#include "models/Groupe.h"
 #include "models/Salle.h"
 
 class AlerteModel;
@@ -13,6 +15,7 @@ class QDialog;
 class QLabel;
 class SalleConfigWidget;
 class SalleGrid;
+class StadeWidget;
 
 class SallesWidget : public QWidget
 {
@@ -30,8 +33,13 @@ private slots:
     void onSalleAjoutee(const QString& id);
     void onSalleSupprimee(const QString& id);
     void onSalleMiseAJour(const QString& id);
+    void onGroupeAjoute(const QString& id);
+    void onGroupeSupprime(const QString& id);
+    void onGroupeMiseAJour(const QString& id);
     void onSalleSelectionnee(const QString& id);
+    void onGroupeSelectionnee(const QString& id);
     void onCreerDemandee(const Salle& salle);
+    void onGroupeCreerDemande(const Groupe& groupe);
     void onModificationDemandee(const Salle& salle);
     void onMesureDemandee(const QString& id);
     void onActualisationDemandee(const QString& id);
@@ -50,6 +58,9 @@ private:
     void connecterSource(DataSource* source);
     void synchroniserSalles();
     void actualiserListeMasquees();
+    void mettreAJourGroupe(const QString& id);
+    void ouvrirStade(const QString& id);
+    void confirmerSuppressionSalle(const QString& id);
 
     DataSource* m_source = nullptr;
     SalleGrid* m_grid = nullptr;
@@ -58,6 +69,8 @@ private:
     AlertePanelWidget* m_panelAlertes = nullptr;
     QLabel* m_status = nullptr;
     QPointer<QDialog> m_detailDialog;
+    QPointer<StadeWidget> m_stadeDialog;
+    QHash<QString, QString> m_groupeSalle;  // id salle -> id groupe (avant suppression)
     QString m_detailSalleId;
     QString m_selectionId;
 };

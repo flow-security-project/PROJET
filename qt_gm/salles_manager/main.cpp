@@ -1,6 +1,7 @@
 #include <QApplication>
 #include <QDialog>
 #include <QFile>
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPalette>
@@ -10,13 +11,15 @@
 
 #include "data/DemoSource.h"
 #include "models/AlerteModel.h"
+#include "models/Groupe.h"
 #include "models/Salle.h"
 #include "ui/MainWindow.h"
 #include "ui/SalleGrid.h"
 #include "ui/SallesWidget.h"
 
-static QString chercherIdScenario(int scenario, int nbEssais = 400);
+static QString chercherIdScenario(int scenario, int depart = 1, int nbEssais = 400);
 static void testAnticipation(MainWindow& window);
+static void testStade(SallesWidget* salles);
 
 int main(int argc, char* argv[])
 {
@@ -100,9 +103,9 @@ int main(int argc, char* argv[])
     return app.exec();
 }
 
-static QString chercherIdScenario(int scenario, int nbEssais)
+static QString chercherIdScenario(int scenario, int depart, int nbEssais)
 {
-    for (int i = 1; i <= nbEssais; ++i) {
+    for (int i = depart; i < depart + nbEssais; ++i) {
         const QString candidat = QStringLiteral("A%1").arg(i, 3, 10, QLatin1Char('0'));
         if (int(qHash(candidat)) % 6 == scenario)
             return candidat;
@@ -272,10 +275,128 @@ static void testAnticipation(MainWindow& window)
                                 qInfo() << "[TEST] alertes intrusion dans le modèle:" << nbIntrusion;
                             }
                             salles->grab().save(QStringLiteral("/tmp/opencode/intrusion.png"));
-                            QCoreApplication::quit();
+                            testStade(salles);
                         });
                     });
                 });
+            });
+        });
+    });
+}
+
+static void testStade(SallesWidget* salles)
+{
+    qInfo() << "[TEST] etape 6 (stade UNI-MARKET)";
+    auto* demo = salles->findChild<DemoSource*>();
+    if (!demo) {
+        qInfo() << "[TEST] demo introuvable";
+        QCoreApplication::quit();
+        return;
+    }
+
+    Groupe stade;
+    stade.id = QStringLiteral("STADE1");
+    stade.nom = QStringLiteral("Stade Sud");
+    stade.mode = ModeFlux::Uni;
+    stade.seuilEcart = 0.15;
+    demo->creerGroupe(stade);
+
+    const QString porte1 = chercherIdScenario(1, 401);   // montée rapide
+    const QString porte2 = chercherIdScenario(1, 801);   // montée rapide
+    const QString porte3 = chercherIdScenario(3, 1201);  // descente (reste vide)
+
+    const auto mk = [&stade](const QString& id, const QString& nom, int cap) {
+        Salle s;
+        s.id = id;
+        s.nom = nom;
+        s.groupeId = stade.id;
+        s.modeFlux = ModeFlux::Uni;
+        s.capacite = cap;
+        s.horaireDebut = QStringLiteral("07:00");
+        s.horaireFin = QStringLiteral("22:00");
+        s.hauteurPorteMesuree = true;
+        s.hauteurPorteCm = 210.0;
+        return s;
+    };
+    demo->creerSalle(mk(porte1, QStringLiteral("Porte Nord"), 4));
+    demo->creerSalle(mk(porte2, QStringLiteral("Porte Est"), 4));
+    demo->creerSalle(mk(porte3, QStringLiteral("Porte Ouest"), 10));
+    qInfo() << "[TEST] stade cree: portes" << porte1 << porte2 << porte3;
+
+    QTimer::singleShot(55000, [porte1, porte2, porte3, salles]() {
+        if (auto* demo = salles->findChild<DemoSource*>()) {
+            const Salle p1 = demo->salles().value(porte1);
+            const Salle p2 = demo->salles().value(porte2);
+            const Salle p3 = demo->salles().value(porte3);
+            qInfo().noquote() << QStringLiteral(
+                "[TEST] decision p1=%1->%2 attente=%3 | p2=%4->%5 attente=%6 | "
+                "p3 occ=%7 decision=%8")
+                                     .arg(p1.decisionFlux, p1.redirectionVers)
+                                     .arg(p1.attenteEstimeeMin)
+                                     .arg(p2.decisionFlux, p2.redirectionVers)
+                                     .arg(p2.attenteEstimeeMin)
+                                     .arg(p3.occupation)
+                                     .arg(p3.decisionFlux);
+        }
+        bool carteStade = false;
+        int cartesMulti = 0;
+        for (QWidget* w : salles->findChildren<QWidget*>()) {
+            if (w->objectName() == QStringLiteral("salleCard")) {
+                ++cartesMulti;
+                const QString idCarte = w->property("salleId").toString();
+                if (idCarte == porte1 || idCarte == porte2 || idCarte == porte3)
+                    qInfo() << "[TEST] ECHEC: porte du stade presente dans la grille MULTI" << idCarte;
+            }
+            if (w->objectName() == QStringLiteral("stadeCard")
+                && w->property("groupeId").toString() == QStringLiteral("STADE1")) {
+                carteStade = true;
+                QMouseEvent ev(QEvent::MouseButtonPress,
+                               QPointF(12, 12), QPointF(12, 12),
+                               Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+                QCoreApplication::sendEvent(w, &ev);
+            }
+        }
+        qInfo() << "[TEST] carte stade trouvee:" << carteStade
+                << "cartes MULTI restantes:" << cartesMulti;
+        QTimer::singleShot(800, [porte1, salles]() {
+            auto* dialogue = salles->findChild<QDialog*>(QStringLiteral("STADE1"));
+            if (!dialogue) {
+                qInfo() << "[TEST] dialogue stade ABSENT";
+                QCoreApplication::quit();
+                return;
+            }
+            dialogue->grab().save(QStringLiteral("/tmp/opencode/stade_interface.png"));
+
+            int cartesStade = 0;
+            QWidget* cartePorte1 = nullptr;
+            for (QWidget* w : dialogue->findChildren<QWidget*>()) {
+                if (w->objectName() == QStringLiteral("stadeSalleCard")) {
+                    ++cartesStade;
+                    if (w->property("salleId").toString() == porte1)
+                        cartePorte1 = w;
+                }
+            }
+            qInfo() << "[TEST] cartes portes dans l'interface stade:" << cartesStade;
+
+            if (cartePorte1) {
+                QMouseEvent ev(QEvent::MouseButtonPress,
+                               QPointF(12, 12), QPointF(12, 12),
+                               Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+                QCoreApplication::sendEvent(cartePorte1, &ev);
+            }
+            QTimer::singleShot(400, [dialogue, porte1, salles]() {
+                QString idEditeur;
+                for (QLineEdit* le : dialogue->findChildren<QLineEdit*>()) {
+                    if (le->placeholderText() == QStringLiteral("Ex. B204")) {
+                        idEditeur = le->text();
+                        break;
+                    }
+                }
+                qInfo() << "[TEST] editeur stade affiche la porte:" << idEditeur
+                        << "attendu:" << porte1;
+                dialogue->grab().save(QStringLiteral("/tmp/opencode/stade_porte_edition.png"));
+                salles->grab().save(QStringLiteral("/tmp/opencode/stade_grille.png"));
+                QCoreApplication::quit();
             });
         });
     });

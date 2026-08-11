@@ -17,6 +17,7 @@
 #include "ui/SalleConfigWidget.h"
 #include "ui/SalleDetailWidget.h"
 #include "ui/SalleGrid.h"
+#include "ui/StadeWidget.h"
 
 SallesWidget::SallesWidget(QWidget* parent)
     : QWidget(parent)
@@ -72,8 +73,12 @@ SallesWidget::SallesWidget(QWidget* parent)
 
     connect(m_grid, &SalleGrid::salleSelectionnee,
             this, &SallesWidget::onSalleSelectionnee);
+    connect(m_grid, &SalleGrid::groupeSelectionnee,
+            this, &SallesWidget::onGroupeSelectionnee);
     connect(m_config, &SalleConfigWidget::creerDemandee,
             this, &SallesWidget::onCreerDemandee);
+    connect(m_config, &SalleConfigWidget::groupeCreerDemande,
+            this, &SallesWidget::onGroupeCreerDemande);
     connect(m_config, &SalleConfigWidget::modificationDemandee,
             this, &SallesWidget::onModificationDemandee);
     connect(m_config, &SalleConfigWidget::mesureDemandee,
@@ -126,8 +131,12 @@ void SallesWidget::onSalleAjoutee(const QString& id)
     if (!m_source || !m_source->salles().contains(id))
         return;
     const Salle salle = m_source->salles().value(id);
-    m_grid->majSalle(salle);
+    m_groupeSalle.insert(id, salle.groupeId);
+    if (salle.groupeId.isEmpty())
+        m_grid->majSalle(salle);
     actualiserListeMasquees();
+    if (!salle.groupeId.isEmpty())
+        mettreAJourGroupe(salle.groupeId);
     if (id == m_selectionId)
         m_config->afficherSalle(salle);
     emit statutChanged(QStringLiteral("Salle %1 ajoutée").arg(id));
@@ -138,8 +147,12 @@ void SallesWidget::onSalleMiseAJour(const QString& id)
     if (!m_source || !m_source->salles().contains(id))
         return;
     const Salle salle = m_source->salles().value(id);
-    m_grid->majSalle(salle);
+    m_groupeSalle.insert(id, salle.groupeId);
+    if (salle.groupeId.isEmpty())
+        m_grid->majSalle(salle);
     actualiserListeMasquees();
+    if (!salle.groupeId.isEmpty())
+        mettreAJourGroupe(salle.groupeId);
     if (id == m_selectionId)
         m_config->afficherStatutReseau(salle);
     emit statutChanged(QStringLiteral("Données actualisées — %1").arg(id));
@@ -153,10 +166,75 @@ void SallesWidget::onSalleSelectionnee(const QString& id)
     m_config->afficherSalle(m_source->salles().value(id));
 }
 
+void SallesWidget::onGroupeAjoute(const QString& id)
+{
+    if (!m_source)
+        return;
+    mettreAJourGroupe(id);
+    emit statutChanged(QStringLiteral("Stade %1 créé").arg(id));
+}
+
+void SallesWidget::onGroupeSupprime(const QString& id)
+{
+    m_grid->supprimerGroupe(id);
+    for (auto it = m_groupeSalle.begin(); it != m_groupeSalle.end();) {
+        if (it.value() == id)
+            it = m_groupeSalle.erase(it);
+        else
+            ++it;
+    }
+    if (m_stadeDialog && m_stadeDialog->objectName() == id) {
+        m_stadeDialog->close();
+        m_stadeDialog = nullptr;
+    }
+    if (m_selectionId == id) {
+        m_selectionId.clear();
+        m_config->afficherCreation();
+    }
+    emit statutChanged(QStringLiteral("Stade supprimé — %1").arg(id));
+}
+
+void SallesWidget::onGroupeMiseAJour(const QString& id)
+{
+    if (!m_source)
+        return;
+    mettreAJourGroupe(id);
+    emit statutChanged(QStringLiteral("Stade modifié — %1").arg(id));
+}
+
+void SallesWidget::onGroupeSelectionnee(const QString& id)
+{
+    if (!m_source || !m_source->groupes().contains(id))
+        return;
+    ouvrirStade(id);
+}
+
+void SallesWidget::onGroupeCreerDemande(const Groupe& groupe)
+{
+    if (!m_source)
+        return;
+    if (m_source->groupes().contains(groupe.id)) {
+        m_config->afficherErreur(QStringLiteral("Un stade avec l'identifiant %1 existe déjà.")
+                                     .arg(groupe.id));
+        return;
+    }
+    if (m_source->salles().contains(groupe.id)) {
+        m_config->afficherErreur(QStringLiteral("L'identifiant %1 est déjà utilisé par une salle.")
+                                     .arg(groupe.id));
+        return;
+    }
+    m_source->creerGroupe(groupe);
+}
+
 void SallesWidget::onCreerDemandee(const Salle& salle)
 {
     if (!m_source)
         return;
+    if (m_source->groupes().contains(salle.id)) {
+        m_config->afficherErreur(QStringLiteral("L'identifiant %1 est déjà utilisé par un stade.")
+                                     .arg(salle.id));
+        return;
+    }
     m_selectionId = salle.id;
     m_source->creerSalle(salle);
 }
@@ -195,30 +273,16 @@ void SallesWidget::onMasquageDemande(const QString& id)
 
 void SallesWidget::onSuppressionDemande(const QString& id)
 {
-    if (id.isEmpty() || !m_source || !m_source->salles().contains(id))
-        return;
-
-    const Salle salle = m_source->salles().value(id);
-    const QString libelle = salle.nom.isEmpty() ? id
-                                                : QStringLiteral("%1 (%2)")
-                                                      .arg(salle.nom, id);
-    const auto reponse = QMessageBox::question(
-        this, QStringLiteral("Supprimer la salle"),
-        QStringLiteral("Supprimer définitivement la salle %1 ?\n"
-                       "La carte sera retirée et les données locales "
-                       "de la salle seront effacées.")
-            .arg(libelle),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-    if (reponse != QMessageBox::Yes)
-        return;
-
-    m_source->supprimerSalle(id);
+    confirmerSuppressionSalle(id);
 }
 
 void SallesWidget::onSalleSupprimee(const QString& id)
 {
+    const QString groupeId = m_groupeSalle.take(id);
     m_grid->supprimerSalle(id);
     actualiserListeMasquees();
+    if (!groupeId.isEmpty())
+        mettreAJourGroupe(groupeId);
     if (m_detailDialog && m_detailSalleId == id) {
         m_detailDialog->close();
         m_detailDialog = nullptr;
@@ -331,6 +395,12 @@ void SallesWidget::connecterSource(DataSource* source)
             this, &SallesWidget::onSalleSupprimee);
     connect(source, &DataSource::salleMiseAJour,
             this, &SallesWidget::onSalleMiseAJour);
+    connect(source, &DataSource::groupeAjoute,
+            this, &SallesWidget::onGroupeAjoute);
+    connect(source, &DataSource::groupeSupprime,
+            this, &SallesWidget::onGroupeSupprime);
+    connect(source, &DataSource::groupeMiseAJour,
+            this, &SallesWidget::onGroupeMiseAJour);
     connect(source, &DataSource::hauteurPorteMesuree,
             this, &SallesWidget::onHauteurMesuree);
     connect(source, &DataSource::erreur,
@@ -353,9 +423,105 @@ void SallesWidget::synchroniserSalles()
 {
     if (!m_source)
         return;
-    for (const Salle& salle : m_source->salles())
-        m_grid->majSalle(salle);
+    for (const Salle& salle : m_source->salles()) {
+        m_groupeSalle.insert(salle.id, salle.groupeId);
+        if (salle.groupeId.isEmpty())
+            m_grid->majSalle(salle);
+    }
+    for (const QString& id : m_source->groupes().keys())
+        mettreAJourGroupe(id);
     actualiserListeMasquees();
+}
+
+void SallesWidget::mettreAJourGroupe(const QString& id)
+{
+    if (!m_source || !m_source->groupes().contains(id))
+        return;
+    const Groupe groupe = m_source->groupes().value(id);
+
+    GroupeVue vue;
+    vue.groupe = groupe;
+    for (const Salle& salle : m_source->salles()) {
+        if (salle.groupeId != id)
+            continue;
+        ++vue.nbPortes;
+        if (salle.enLigne && !salle.enAttente)
+            ++vue.nbEnLigne;
+        if (salle.occupation >= 0) {
+            vue.occupation += salle.occupation;
+            vue.capacite += salle.capacite;
+        }
+        if (salle.decisionFlux == QStringLiteral("redirection")
+            && !salle.redirectionVers.isEmpty()) {
+            if (!vue.redirectionTexte.isEmpty())
+                vue.redirectionTexte += QStringLiteral("   |   ");
+            vue.redirectionTexte += QStringLiteral("%1 → %2").arg(salle.id, salle.redirectionVers);
+        }
+    }
+
+    if (vue.nbPortes == 0 || vue.nbEnLigne == 0) {
+        vue.statut = vue.nbPortes == 0 ? QStringLiteral("ok") : QStringLiteral("offline");
+    } else if (vue.capacite > 0 && double(vue.occupation) / double(vue.capacite) >= 0.95) {
+        vue.statut = QStringLiteral("sature");
+    } else if (vue.capacite > 0 && double(vue.occupation) / double(vue.capacite) >= 0.80) {
+        vue.statut = QStringLiteral("attention");
+    } else {
+        vue.statut = QStringLiteral("ok");
+    }
+
+    m_grid->majGroupe(vue);
+}
+
+void SallesWidget::ouvrirStade(const QString& id)
+{
+    if (!m_source || !m_source->groupes().contains(id))
+        return;
+
+    if (m_stadeDialog && m_stadeDialog->objectName() == id) {
+        m_stadeDialog->raise();
+        m_stadeDialog->activateWindow();
+        return;
+    }
+    if (m_stadeDialog) {
+        m_stadeDialog->close();
+        m_stadeDialog = nullptr;
+    }
+
+    auto* stade = new StadeWidget(m_source, id, this);
+    stade->setObjectName(id);
+    stade->setWindowTitle(QStringLiteral("Stade — %1").arg(id));
+    stade->resize(1040, 620);
+    m_stadeDialog = stade;
+
+    connect(stade, &StadeWidget::detailPorteDemande, this,
+            [this](const QString& salleId) {
+                if (m_source && m_source->salles().contains(salleId))
+                    onCourbeDemandee(m_source->salles().value(salleId));
+            });
+
+    stade->show();
+}
+
+void SallesWidget::confirmerSuppressionSalle(const QString& id)
+{
+    if (id.isEmpty() || !m_source || !m_source->salles().contains(id))
+        return;
+
+    const Salle salle = m_source->salles().value(id);
+    const QString libelle = salle.nom.isEmpty() ? id
+                                                : QStringLiteral("%1 (%2)")
+                                                      .arg(salle.nom, id);
+    const auto reponse = QMessageBox::question(
+        this, QStringLiteral("Supprimer la porte"),
+        QStringLiteral("Supprimer définitivement la porte %1 ?\n"
+                       "La carte sera retirée et les données locales "
+                       "de la salle seront effacées.")
+            .arg(libelle),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (reponse != QMessageBox::Yes)
+        return;
+
+    m_source->supprimerSalle(id);
 }
 
 void SallesWidget::actualiserListeMasquees()

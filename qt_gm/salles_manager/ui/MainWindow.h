@@ -35,4 +35,5 @@ private:
     MqttSource* m_mqtt = nullptr;
     Qt::WindowStates m_etatAvantPleinEcran;
     bool m_basculePleinEcran = false;
+    bool m_restauration = false;
 };

@@ -4,6 +4,7 @@
 #include <QObject>
 
 #include "models/Alerte.h"
+#include "models/Groupe.h"
 #include "models/Salle.h"
 
 class DataSource : public QObject
@@ -29,10 +30,18 @@ public:
 
     const QHash<QString, Salle>& salles() const { return m_salles; }
 
+    void creerGroupe(const Groupe& groupe);
+    void modifierGroupe(const Groupe& groupe);
+    void supprimerGroupe(const QString& id);
+    const QHash<QString, Groupe>& groupes() const { return m_groupes; }
+
 signals:
     void salleAjoutee(const QString& id);
     void salleSupprimee(const QString& id);
     void salleMiseAJour(const QString& id);
+    void groupeAjoute(const QString& id);
+    void groupeSupprime(const QString& id);
+    void groupeMiseAJour(const QString& id);
     void hauteurPorteMesuree(const QString& id, double centimetres,
                              bool succes, const QString& note);
     void statutSource(bool connecte, const QString& note);
@@ -42,4 +51,5 @@ signals:
 
 protected:
     QHash<QString, Salle> m_salles;
+    QHash<QString, Groupe> m_groupes;
 };

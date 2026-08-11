@@ -6,10 +6,14 @@
 #include <QString>
 #include <QVector>
 
+#include "models/Groupe.h"
+
 struct Salle
 {
     QString id;
     QString nom;
+    QString groupeId;      // vide = salle indépendante
+    ModeFlux modeFlux = ModeFlux::Multi;
     int capacite = 30;
     QString horaireDebut = "07:00";
     QString horaireFin = "22:00";
@@ -37,6 +41,10 @@ struct Salle
     double intrusionDureeS = 0.0;
     QString lcdLigne1;
     QString lcdLigne2;
+
+    QString decisionFlux;          // "normal" | "attente" | "redirection"
+    QString redirectionVers;       // porte de destination en UNI
+    double attenteEstimeeMin = -1.0;  // -1 = indéterminée
 
     QVector<double> occHist;
     QVector<double> densHist;

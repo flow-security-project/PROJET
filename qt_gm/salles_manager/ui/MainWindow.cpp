@@ -15,7 +15,7 @@
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
-    setWindowTitle(QStringLiteral("i++ — Création et supervision des salles"));
+    setWindowTitle(QStringLiteral("i++ — Supervision des salles"));
     resize(1280, 780);
 
     m_demo = new DemoSource(this);
@@ -69,13 +69,15 @@ void MainWindow::changeEvent(QEvent* event)
 {
     if (event->type() == QEvent::WindowStateChange && !m_basculePleinEcran) {
         const Qt::WindowStates etat = windowState();
-        if (etat.testFlag(Qt::WindowMaximized)
+        if (!m_restauration
+            && etat.testFlag(Qt::WindowMaximized)
             && !etat.testFlag(Qt::WindowFullScreen)) {
             m_etatAvantPleinEcran = etat;
             m_basculePleinEcran = true;
             showFullScreen();
             m_basculePleinEcran = false;
         }
+        m_restauration = false;
     }
     QMainWindow::changeEvent(event);
 }
@@ -83,6 +85,7 @@ void MainWindow::changeEvent(QEvent* event)
 void MainWindow::keyPressEvent(QKeyEvent* event)
 {
     if (event->key() == Qt::Key_Escape && isFullScreen()) {
+        m_restauration = true;
         setWindowState(m_etatAvantPleinEcran);
         return;
     }

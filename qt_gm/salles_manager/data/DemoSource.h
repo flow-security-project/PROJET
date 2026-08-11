@@ -32,6 +32,7 @@ private slots:
 private:
     void simulerTof(Salle& salle, qint64 maintenantMs);
     void verifierIntrusion(const QString& salleId, qint64 maintenantMs);
+    void majDecisionsFlux();
 
     QTimer m_timer;
     int m_tick = 0;
@@ -40,4 +41,5 @@ private:
     QHash<QString, IntrusionDetector*> m_intrusion;
     QHash<QString, qint64> m_dernierTofMs;
     QHash<QString, bool> m_presenceToF;
+    QHash<QString, QString> m_dernieresCiblesFlux;
 };

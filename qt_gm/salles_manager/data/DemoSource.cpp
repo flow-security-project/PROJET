@@ -6,6 +6,7 @@
 #include <QRandomGenerator>
 
 #include "engine/densite/DensiteEstimator.h"
+#include "engine/flux/FluxOrchestrator.h"
 #include "engine/securite/IntrusionDetector.h"
 #include "models/Alerte.h"
 
@@ -117,6 +118,7 @@ void DemoSource::supprimerSalle(const QString& id)
     m_fluxAccum.remove(id);
     m_dernierTofMs.remove(id);
     m_presenceToF.remove(id);
+    m_dernieresCiblesFlux.remove(id);
     if (auto* estimateur = m_densite.take(id))
         delete estimateur;
     if (auto* detecteur = m_intrusion.take(id))
@@ -231,6 +233,42 @@ void DemoSource::onTick()
         s.mettreAJourAnticipation();
         s.pushHistorique();
         emit salleMiseAJour(s.id);
+    }
+    majDecisionsFlux();
+}
+
+void DemoSource::majDecisionsFlux()
+{
+    const QHash<QString, DecisionFlux> decisions
+        = FluxOrchestrator::calculer(m_salles, m_groupes, &m_dernieresCiblesFlux);
+
+    for (auto it = m_salles.begin(); it != m_salles.end(); ++it) {
+        Salle& salle = it.value();
+        const DecisionFlux decision = decisions.value(salle.id);
+        const bool change = salle.decisionFlux != decision.decision
+                            || salle.redirectionVers != decision.redirectionVers
+                            || std::abs(salle.attenteEstimeeMin
+                                        - decision.attenteEstimeeMin)
+                                   > 0.01;
+        salle.decisionFlux = decision.decision;
+        salle.redirectionVers = decision.redirectionVers;
+        salle.attenteEstimeeMin = decision.attenteEstimeeMin;
+        if (!change)
+            continue;
+
+        emit salleMiseAJour(salle.id);
+
+        if (decision.decision == QStringLiteral("redirection")) {
+            emit logAppend(QStringLiteral("FLUX UNI — %1 saturée : redirection vers %2")
+                               .arg(salle.id, decision.redirectionVers));
+        } else if (decision.decision == QStringLiteral("attente")) {
+            const QString attente = decision.attenteEstimeeMin >= 0.0
+                                        ? QStringLiteral("~%1 min")
+                                              .arg(int(decision.attenteEstimeeMin + 0.5))
+                                        : QStringLiteral("indéterminée");
+            emit logAppend(QStringLiteral("FLUX MULTI — %1 saturée : attente %2")
+                               .arg(salle.id, attente));
+        }
     }
 }
 

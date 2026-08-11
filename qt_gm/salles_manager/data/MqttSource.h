@@ -40,11 +40,13 @@ private slots:
 
 private:
     void publierConfiguration(const Salle& salle);
+    void publierDecisionFlux(const Salle& salle);
     void finaliserMesure(bool succes, const QString& note);
     void preparerDensite(const QString& salleId);
     void preparerSecurite(const QString& salleId);
     void verifierFluxSortie(const QString& salleId);
     void verifierIntrusion(const QString& salleId, qint64 maintenantMs);
+    void majDecisionsFlux();
     static double mediane(QVector<double> valeurs);
 
     MqttClient m_client;
@@ -55,4 +57,5 @@ private:
     QHash<QString, QVector<qint64>> m_departTimes;
     QHash<QString, DensiteEstimator*> m_densite;
     QHash<QString, IntrusionDetector*> m_intrusion;
+    QHash<QString, QString> m_dernieresCiblesFlux;
 };

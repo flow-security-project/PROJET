@@ -16,12 +16,16 @@ qt_add_executable(salles_manager
     models/Salle.h
     models/Alerte.h
     models/AlerteModel.h
+    models/Groupe.h
 
     engine/densite/DensiteEstimator.h
     engine/densite/DensiteEstimator.cpp
 
     engine/securite/IntrusionDetector.h
     engine/securite/IntrusionDetector.cpp
+
+    engine/flux/FluxOrchestrator.h
+    engine/flux/FluxOrchestrator.cpp
 
     data/DataSource.h
     data/DataSource.cpp
@@ -46,6 +50,8 @@ qt_add_executable(salles_manager
     ui/AlertePanelWidget.cpp
     ui/SalleConfigWidget.h
     ui/SalleConfigWidget.cpp
+    ui/StadeWidget.h
+    ui/StadeWidget.cpp
     ui/SallesWidget.h
     ui/SallesWidget.cpp
     ui/MainWindow.h

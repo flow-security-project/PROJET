@@ -34,6 +34,14 @@ void SalleGrid::majSalle(const Salle& salle)
     mettreAJourCarte(salle.id);
 }
 
+void SalleGrid::majGroupe(const GroupeVue& vue)
+{
+    m_groupes.insert(vue.groupe.id, vue);
+    if (!m_cartes.contains(vue.groupe.id))
+        construireCarteGroupe(vue.groupe.id);
+    mettreAJourCarteGroupe(vue.groupe.id);
+}
+
 void SalleGrid::viderVue()
 {
     for (const Carte& carte : std::as_const(m_cartes)) {
@@ -41,6 +49,7 @@ void SalleGrid::viderVue()
         delete carte.widget;
     }
     m_cartes.clear();
+    m_groupes.clear();
     m_salles.clear();
     m_masquees.clear();
     m_selection.clear();
@@ -84,6 +93,19 @@ void SalleGrid::supprimerSalle(const QString& id)
     reflow();
 }
 
+void SalleGrid::supprimerGroupe(const QString& id)
+{
+    m_groupes.remove(id);
+    if (m_cartes.contains(id)) {
+        const Carte carte = m_cartes.take(id);
+        m_layout->removeWidget(carte.widget);
+        delete carte.widget;
+    }
+    if (m_selection == id)
+        m_selection.clear();
+    reflow();
+}
+
 QStringList SalleGrid::sallesMasquees() const
 {
     return m_masquees.values();
@@ -98,10 +120,16 @@ void SalleGrid::resizeEvent(QResizeEvent* event)
 bool SalleGrid::eventFilter(QObject* watched, QEvent* event)
 {
     if (event->type() == QEvent::MouseButtonPress) {
-        const QString id = watched->property("salleId").toString();
-        if (!id.isEmpty()) {
-            setSelection(id);
-            emit salleSelectionnee(id);
+        const QString salleId = watched->property("salleId").toString();
+        if (!salleId.isEmpty()) {
+            setSelection(salleId);
+            emit salleSelectionnee(salleId);
+            return true;
+        }
+        const QString groupeId = watched->property("groupeId").toString();
+        if (!groupeId.isEmpty()) {
+            setSelection(groupeId);
+            emit groupeSelectionnee(groupeId);
             return true;
         }
     }
@@ -114,8 +142,10 @@ void SalleGrid::construireCarte(const QString& id)
         return;
 
     auto* card = new QFrame(this);
-    card->setObjectName(QStringLiteral("salleCard"));
+    card->setObjectName(m_themeStade ? QStringLiteral("stadeSalleCard")
+                                     : QStringLiteral("salleCard"));
     card->setProperty("salleId", id);
+    card->setProperty("stade", m_themeStade);
     card->setMinimumSize(300, 200);
     card->setMaximumSize(440, 240);
     card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -262,7 +292,8 @@ void SalleGrid::mettreAJourCarte(const QString& id)
         else if (t >= 0.60)
             base = QColor(QStringLiteral("#D97706"));
         else
-            base = QColor(QStringLiteral("#059669"));
+            base = m_themeStade ? QColor(QStringLiteral("#7C3AED"))
+                                : QColor(QStringLiteral("#059669"));
     }
     carte.accent->setStyleSheet(
         QStringLiteral("background:qlineargradient(x1:0, y1:0, x2:0, y2:1, "
@@ -335,6 +366,213 @@ void SalleGrid::mettreAJourCarte(const QString& id)
             ? QStringLiteral("%1 cm").arg(salle.hauteurPorteCm, 0, 'f', 1) 
             : QStringLiteral("non mesurée"))
         .arg(salle.horaireDebut, salle.horaireFin));
+
+    carte.widget->setProperty("level", level);
+    carte.widget->setProperty("selected", id == m_selection);
+    carte.widget->style()->unpolish(carte.widget);
+    carte.widget->style()->polish(carte.widget);
+}
+
+void SalleGrid::construireCarteGroupe(const QString& id)
+{
+    if (m_cartes.contains(id) || !m_groupes.contains(id))
+        return;
+
+    auto* card = new QFrame(this);
+    card->setObjectName(QStringLiteral("stadeCard"));
+    card->setProperty("groupeId", id);
+    card->setMinimumSize(300, 200);
+    card->setMaximumSize(440, 240);
+    card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    card->setCursor(Qt::PointingHandCursor);
+
+    auto* led = new QLabel(card);
+    led->setObjectName(QStringLiteral("cardLed"));
+
+    auto* title = new QLabel(card);
+    title->setObjectName(QStringLiteral("cardTitle"));
+
+    auto* identifiant = new QLabel(card);
+    identifiant->setObjectName(QStringLiteral("cardTag"));
+
+    auto* status = new QLabel(card);
+    status->setObjectName(QStringLiteral("cardStatusBadge"));
+
+    auto* headerLayout = new QHBoxLayout;
+    headerLayout->setContentsMargins(0, 0, 0, 0);
+    headerLayout->setSpacing(8);
+    headerLayout->addWidget(led);
+    headerLayout->addWidget(title);
+    headerLayout->addWidget(identifiant);
+    headerLayout->addStretch();
+    headerLayout->addWidget(status);
+
+    auto* occupation = new QLabel(card);
+    occupation->setObjectName(QStringLiteral("cardOccupancyNum"));
+
+    auto* pourcentage = new QLabel(card);
+    pourcentage->setObjectName(QStringLiteral("cardPercent"));
+
+    auto* occLayout = new QHBoxLayout;
+    occLayout->setContentsMargins(0, 8, 0, 0);
+    occLayout->addWidget(occupation);
+    occLayout->addStretch();
+    occLayout->addWidget(pourcentage);
+
+    auto* barre = new QProgressBar(card);
+    barre->setObjectName(QStringLiteral("cardProgressBar"));
+    barre->setTextVisible(false);
+    barre->setFixedHeight(8);
+    barre->setRange(0, 100);
+
+    auto* footer = new QFrame(card);
+    footer->setObjectName(QStringLiteral("cardFooter"));
+
+    auto* flux = new QLabel(footer);
+    flux->setObjectName(QStringLiteral("cardMetric"));
+
+    auto* details = new QLabel(footer);
+    details->setObjectName(QStringLiteral("cardMetric"));
+
+    auto* hauteur = new QLabel(footer);
+    hauteur->setObjectName(QStringLiteral("cardMetricSub"));
+
+    auto* footerLayout = new QVBoxLayout(footer);
+    footerLayout->setContentsMargins(12, 10, 12, 10);
+    footerLayout->setSpacing(5);
+
+    auto* infoRow1 = new QHBoxLayout;
+    infoRow1->setContentsMargins(0, 0, 0, 0);
+    infoRow1->addWidget(flux);
+    infoRow1->addStretch();
+    infoRow1->addWidget(details);
+
+    footerLayout->addLayout(infoRow1);
+    footerLayout->addWidget(hauteur);
+
+    auto* accent = new QFrame(card);
+    accent->setObjectName(QStringLiteral("cardAccent"));
+    accent->setFixedWidth(8);
+
+    auto* body = new QWidget(card);
+    body->setObjectName(QStringLiteral("cardBody"));
+
+    auto* layout = new QVBoxLayout(body);
+    layout->setContentsMargins(16, 14, 16, 14);
+    layout->setSpacing(10);
+    layout->addLayout(headerLayout);
+    layout->addLayout(occLayout);
+    layout->addWidget(barre);
+    layout->addWidget(footer);
+
+    auto* rootLayout = new QHBoxLayout(card);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
+    rootLayout->setSpacing(0);
+    rootLayout->addWidget(accent);
+    rootLayout->addWidget(body, 1);
+
+    const QList<QWidget*> clickable = {card, accent, body, led, title, identifiant,
+                                       status, occupation, pourcentage, barre,
+                                       footer, flux, details, hauteur};
+    for (QWidget* widget : clickable) {
+        widget->setProperty("groupeId", id);
+        widget->installEventFilter(this);
+    }
+
+    Carte carte;
+    carte.widget = card;
+    carte.accent = accent;
+    carte.led = led;
+    carte.titre = title;
+    carte.identifiant = identifiant;
+    carte.statut = status;
+    carte.occupation = occupation;
+    carte.pourcentage = pourcentage;
+    carte.barre = barre;
+    carte.flux = flux;
+    carte.details = details;
+    carte.hauteur = hauteur;
+    m_cartes.insert(id, carte);
+    reflow();
+}
+
+void SalleGrid::mettreAJourCarteGroupe(const QString& id)
+{
+    if (!m_cartes.contains(id) || !m_groupes.contains(id))
+        return;
+
+    const GroupeVue& vue = m_groupes[id];
+    Carte& carte = m_cartes[id];
+
+    QColor base;
+    if (vue.statut == QStringLiteral("offline")) {
+        base = QColor(QStringLiteral("#94A3B8"));
+    } else if (vue.statut == QStringLiteral("sature")) {
+        base = QColor(QStringLiteral("#DC2626"));
+    } else if (vue.statut == QStringLiteral("attention")) {
+        base = QColor(QStringLiteral("#EF6C00"));
+    } else {
+        base = QColor(QStringLiteral("#059669"));
+    }
+    carte.accent->setStyleSheet(
+        QStringLiteral("background:qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+                       "stop:0 %1, stop:1 %2); border:none; "
+                       "border-top-left-radius:8px; border-bottom-left-radius:8px;")
+            .arg(base.lighter(125).name(), base.darker(115).name()));
+
+    carte.titre->setText(QStringLiteral("%1").arg(vue.groupe.nom.isEmpty()
+                                                      ? vue.groupe.id
+                                                      : vue.groupe.nom));
+    carte.identifiant->setText(QStringLiteral("[%1]").arg(vue.groupe.id));
+
+    const bool uni = vue.groupe.mode == ModeFlux::Uni;
+    QString statusText;
+    QString level;
+    if (vue.statut == QStringLiteral("offline")) {
+        statusText = QStringLiteral("STADE HORS LIGNE");
+        level = QStringLiteral("offline");
+    } else if (vue.statut == QStringLiteral("sature")) {
+        statusText = uni ? QStringLiteral("STADE SATURÉ") : QStringLiteral("SATURÉ");
+        level = QStringLiteral("critical");
+    } else if (vue.statut == QStringLiteral("attention")) {
+        statusText = uni ? QStringLiteral("STADE SOUS TENSION") : QStringLiteral("SOUS TENSION");
+        level = QStringLiteral("warning");
+    } else {
+        statusText = uni ? QStringLiteral("STADE EN LIGNE") : QStringLiteral("EN LIGNE");
+        level = QStringLiteral("normal");
+    }
+
+    carte.statut->setText(statusText);
+    carte.statut->setProperty("level", level);
+    carte.statut->style()->unpolish(carte.statut);
+    carte.statut->style()->polish(carte.statut);
+
+    carte.led->setProperty("level", level);
+    carte.led->style()->unpolish(carte.led);
+    carte.led->style()->polish(carte.led);
+
+    carte.occupation->setText(QStringLiteral("%1 / %2").arg(vue.occupation)
+                                  .arg(vue.capacite));
+    const int pct = vue.capacite > 0 ? int(double(vue.occupation) / double(vue.capacite) * 100.0)
+                                     : 0;
+    carte.pourcentage->setText(QStringLiteral("%1 %").arg(pct));
+    carte.pourcentage->setProperty("level", level);
+    carte.pourcentage->style()->unpolish(carte.pourcentage);
+    carte.pourcentage->style()->polish(carte.pourcentage);
+
+    carte.barre->setValue(qBound(0, pct, 100));
+    carte.barre->setProperty("level", level);
+    carte.barre->style()->unpolish(carte.barre);
+    carte.barre->style()->polish(carte.barre);
+
+    carte.flux->setText(QStringLiteral("Portes : %1   (%2 en ligne)")
+                            .arg(vue.nbPortes)
+                            .arg(vue.nbEnLigne));
+    carte.details->setText(uni ? QStringLiteral("UNI-MARKET")
+                               : QStringLiteral("MULTI-MARKET"));
+    carte.hauteur->setText(vue.redirectionTexte.isEmpty()
+                               ? QStringLiteral("Aucune redirection active")
+                               : vue.redirectionTexte);
 
     carte.widget->setProperty("level", level);
     carte.widget->setProperty("selected", id == m_selection);

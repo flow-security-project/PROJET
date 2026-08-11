@@ -9,6 +9,7 @@
 #include <QJsonParseError>
 
 #include "engine/densite/DensiteEstimator.h"
+#include "engine/flux/FluxOrchestrator.h"
 #include "engine/securite/IntrusionDetector.h"
 #include "models/Alerte.h"
 
@@ -123,6 +124,7 @@ void MqttSource::supprimerSalle(const QString& id)
 
     m_salles.remove(id);
     m_departTimes.remove(id);
+    m_dernieresCiblesFlux.remove(id);
     if (auto* estimateur = m_densite.take(id)) {
         delete estimateur;
     }
@@ -279,7 +281,7 @@ void MqttSource::onMessage(const QString& topic, const QByteArray& payload)
         salle.enAttente = false;
         salle.mettreAJourAnticipation();
         salle.pushHistorique();
-    } else if (suffix == QStringLiteral("config/confirm")) {
+    } else     if (suffix == QStringLiteral("config/confirm")) {
         salle.nom = object.value(QStringLiteral("nom")).toString(salle.nom);
         salle.capacite = object.value(QStringLiteral("capacite")).toInt(salle.capacite);
         const QJsonObject horaires = object.value(QStringLiteral("horaires")).toObject();
@@ -342,6 +344,65 @@ void MqttSource::onWatchdogTimeout()
                 salle.nbPersonnesEstime = est.nbPersonnes;
             }
             emit salleMiseAJour(salle.id);
+        }
+    }
+    majDecisionsFlux();
+}
+
+void MqttSource::publierDecisionFlux(const Salle& salle)
+{
+    QJsonObject payload;
+    payload.insert(QStringLiteral("mode"), salle.decisionFlux);
+    if (salle.decisionFlux == QStringLiteral("redirection")
+        && !salle.redirectionVers.isEmpty()) {
+        payload.insert(QStringLiteral("vers"), salle.redirectionVers);
+    } else if (salle.decisionFlux == QStringLiteral("attente")
+               && salle.attenteEstimeeMin >= 0.0) {
+        payload.insert(QStringLiteral("attente_min"),
+                       qMax(1.0, std::round(salle.attenteEstimeeMin)));
+    }
+
+    const QString topic = QStringLiteral("salle/%1/flux/decision").arg(salle.id);
+    if (!m_client.publish(topic, QJsonDocument(payload).toJson(QJsonDocument::Compact))) {
+        emit logAppend(QStringLiteral("DÉCISION FLUX en attente — broker déconnecté : %1")
+                           .arg(topic));
+        return;
+    }
+    emit logAppend(QStringLiteral("DÉCISION FLUX envoyée — %1").arg(topic));
+}
+
+void MqttSource::majDecisionsFlux()
+{
+    const QHash<QString, DecisionFlux> decisions
+        = FluxOrchestrator::calculer(m_salles, m_groupes, &m_dernieresCiblesFlux);
+
+    for (auto it = m_salles.begin(); it != m_salles.end(); ++it) {
+        Salle& salle = it.value();
+        const DecisionFlux decision = decisions.value(salle.id);
+        const bool change = salle.decisionFlux != decision.decision
+                            || salle.redirectionVers != decision.redirectionVers
+                            || std::abs(salle.attenteEstimeeMin
+                                        - decision.attenteEstimeeMin)
+                                   > 0.01;
+        salle.decisionFlux = decision.decision;
+        salle.redirectionVers = decision.redirectionVers;
+        salle.attenteEstimeeMin = decision.attenteEstimeeMin;
+        if (!change)
+            continue;
+
+        publierDecisionFlux(salle);
+        emit salleMiseAJour(salle.id);
+
+        if (decision.decision == QStringLiteral("redirection")) {
+            emit logAppend(QStringLiteral("FLUX UNI — %1 saturée : redirection vers %2")
+                               .arg(salle.id, decision.redirectionVers));
+        } else if (decision.decision == QStringLiteral("attente")) {
+            const QString attente = decision.attenteEstimeeMin >= 0.0
+                                        ? QStringLiteral("~%1 min")
+                                              .arg(int(decision.attenteEstimeeMin + 0.5))
+                                        : QStringLiteral("indéterminée");
+            emit logAppend(QStringLiteral("FLUX MULTI — %1 saturée : attente %2")
+                               .arg(salle.id, attente));
         }
     }
 }
