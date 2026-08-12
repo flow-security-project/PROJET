@@ -2,15 +2,18 @@
 
 #include <QCheckBox>
 #include <QDateTime>
+#include <QFileDialog>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QVBoxLayout>
 
 #include "models/Alerte.h"
 #include "models/AlerteModel.h"
+#include "history/HistoryManager.h"
 
 static QString severiteHex(const QString& severite)
 {
@@ -21,9 +24,11 @@ static QString severiteHex(const QString& severite)
     return QStringLiteral("#1E88E5");
 }
 
-AlertePanelWidget::AlertePanelWidget(AlerteModel* modele, QWidget* parent)
+AlertePanelWidget::AlertePanelWidget(AlerteModel* modele, HistoryManager* history,
+                                     QWidget* parent)
     : QWidget(parent)
     , m_modele(modele)
+    , m_history(history)
 {
     setObjectName(QStringLiteral("alertePanel"));
     setAttribute(Qt::WA_StyledBackground, true);
@@ -33,6 +38,9 @@ AlertePanelWidget::AlertePanelWidget(AlerteModel* modele, QWidget* parent)
 
     m_filtreNonAcq = new QCheckBox(QStringLiteral("Non acquittées uniquement"), this);
     m_filtreNonAcq->setObjectName(QStringLiteral("filtreAlertes"));
+
+    m_exporter = new QPushButton(QStringLiteral("Exporter CSV"), this);
+    m_exporter->setObjectName(QStringLiteral("btnExporterAlertes"));
 
     auto* zone = new QScrollArea(this);
     zone->setObjectName(QStringLiteral("alerteScroll"));
@@ -50,7 +58,12 @@ AlertePanelWidget::AlertePanelWidget(AlerteModel* modele, QWidget* parent)
     layout->setContentsMargins(10, 8, 10, 10);
     layout->setSpacing(6);
     layout->addWidget(titre);
-    layout->addWidget(m_filtreNonAcq);
+    auto* filterLayout = new QHBoxLayout;
+    filterLayout->setContentsMargins(0, 0, 0, 0);
+    filterLayout->addWidget(m_filtreNonAcq);
+    filterLayout->addStretch();
+    filterLayout->addWidget(m_exporter);
+    layout->addLayout(filterLayout);
     layout->addWidget(zone, 1);
 
     if (m_modele) {
@@ -63,6 +76,24 @@ AlertePanelWidget::AlertePanelWidget(AlerteModel* modele, QWidget* parent)
     }
     connect(m_filtreNonAcq, &QCheckBox::toggled,
             this, [this](bool) { reconstruire(); });
+    connect(m_exporter, &QPushButton::clicked, this, [this]() {
+        if (!m_history || !m_modele)
+            return;
+        const QString path = QFileDialog::getSaveFileName(
+            this, QStringLiteral("Exporter l'historique des alertes"),
+            QStringLiteral("alertes_%1.csv")
+                .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss"))),
+            QStringLiteral("Fichiers CSV (*.csv)"));
+        if (path.isEmpty())
+            return;
+        QString error;
+        if (!m_history->exportAlertesCsv(path, m_modele->alertes(), &error)) {
+            QMessageBox::warning(this, QStringLiteral("Export impossible"), error);
+            return;
+        }
+        QMessageBox::information(this, QStringLiteral("Export terminé"),
+                                 QStringLiteral("Historique des alertes exporté."));
+    });
 
     reconstruire();
 }

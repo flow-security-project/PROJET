@@ -6,6 +6,8 @@
 
 class AlerteModel;
 class DataSource;
+class HistoryManager;
+enum class HistoryPeriod;
 class IntegratedPlotWidget;
 class JaugeSaturation;
 class QLabel;
@@ -18,18 +20,24 @@ class SalleDetailWidget : public QWidget
 public:
     explicit SalleDetailWidget(DataSource* source, const QString& salleId,
                                AlerteModel* modele = nullptr,
+                               HistoryManager* history = nullptr,
                                QWidget* parent = nullptr);
 
 private slots:
     void onSalleMiseAJour(const QString& id);
+    void actualiserHistorique();
+    void exporterCsv();
+    void exporterPdf();
 
 private:
     void afficher(const Salle& salle);
     void actualiserAlertes();
     double debitInstantane(const Salle& salle) const;
+    HistoryPeriod periodeSelectionnee() const;
 
     DataSource* m_source = nullptr;
     AlerteModel* m_modeleAlertes = nullptr;
+    HistoryManager* m_history = nullptr;
     QString m_salleId;
     QLabel* m_titre = nullptr;
     QLabel* m_statut = nullptr;
@@ -46,6 +54,8 @@ private:
     QLabel* m_tendance = nullptr;
     QLabel* m_regime = nullptr;
     QLabel* m_confiance = nullptr;
+    QLabel* m_historiqueResume = nullptr;
+    class QComboBox* m_periode = nullptr;
     JaugeSaturation* m_jauge = nullptr;
     IntegratedPlotWidget* m_plot = nullptr;
 };

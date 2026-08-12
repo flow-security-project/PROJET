@@ -1,17 +1,23 @@
 #include "SalleDetailWidget.h"
 
 #include <QCheckBox>
+#include <QComboBox>
+#include <QFileDialog>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QDateTime>
 #include <QLabel>
 #include <QListWidget>
+#include <QMessageBox>
+#include <QPrinter>
 #include <QPushButton>
 #include <QStyle>
+#include <QTextDocument>
 #include <QVBoxLayout>
 
 #include "data/DataSource.h"
+#include "history/HistoryManager.h"
 #include "models/Alerte.h"
 #include "models/AlerteModel.h"
 #include "ui/IntegratedPlotWidget.h"
@@ -34,11 +40,13 @@ QGroupBox* kpiBox(QWidget* parent)
 }
 
 SalleDetailWidget::SalleDetailWidget(DataSource* source, const QString& salleId,
-                                     AlerteModel* modele, QWidget* parent)
+                                     AlerteModel* modele, HistoryManager* history,
+                                     QWidget* parent)
     : QWidget(parent)
     , m_source(source)
     , m_salleId(salleId)
     , m_modeleAlertes(modele)
+    , m_history(history)
 {
     setObjectName(QStringLiteral("detailRoot"));
     setAttribute(Qt::WA_StyledBackground, true);
@@ -172,6 +180,41 @@ SalleDetailWidget::SalleDetailWidget(DataSource* source, const QString& salleId,
                               : QStringLiteral("Pause direct"));
     });
 
+    auto* historiqueControls = new QHBoxLayout;
+    historiqueControls->setContentsMargins(0, 4, 0, 0);
+    historiqueControls->setSpacing(6);
+    historiqueControls->addWidget(new QLabel(QStringLiteral("Historique :"), this));
+    m_periode = new QComboBox(this);
+    m_periode->addItem(QStringLiteral("Temps réel"));
+    m_periode->addItem(QStringLiteral("Jour"));
+    m_periode->addItem(QStringLiteral("Semaine"));
+    m_periode->addItem(QStringLiteral("Mois"));
+    m_periode->setObjectName(QStringLiteral("historiquePeriode"));
+    historiqueControls->addWidget(m_periode);
+
+    auto* charger = new QPushButton(QStringLiteral("Charger"), this);
+    charger->setObjectName(QStringLiteral("btnChargerHistorique"));
+    historiqueControls->addWidget(charger);
+    auto* exporterCsvButton = new QPushButton(QStringLiteral("Exporter CSV"), this);
+    exporterCsvButton->setObjectName(QStringLiteral("btnExporterSalleCsv"));
+    historiqueControls->addWidget(exporterCsvButton);
+    auto* exporterPdfButton = new QPushButton(QStringLiteral("Exporter PDF"), this);
+    exporterPdfButton->setObjectName(QStringLiteral("btnExporterSallePdf"));
+    historiqueControls->addWidget(exporterPdfButton);
+    historiqueControls->addStretch();
+
+    m_historiqueResume = new QLabel(this);
+    m_historiqueResume->setObjectName(QStringLiteral("historiqueResume"));
+    m_historiqueResume->setWordWrap(true);
+    connect(m_periode, qOverload<int>(&QComboBox::currentIndexChanged),
+            this, [this](int) { actualiserHistorique(); });
+    connect(charger, &QPushButton::clicked,
+            this, &SalleDetailWidget::actualiserHistorique);
+    connect(exporterCsvButton, &QPushButton::clicked,
+            this, &SalleDetailWidget::exporterCsv);
+    connect(exporterPdfButton, &QPushButton::clicked,
+            this, &SalleDetailWidget::exporterPdf);
+
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(10, 10, 10, 10);
     layout->setSpacing(8);
@@ -182,6 +225,8 @@ SalleDetailWidget::SalleDetailWidget(DataSource* source, const QString& salleId,
     layout->addWidget(m_alerteIntrusion);
     layout->addWidget(anticipationBox);
     layout->addLayout(controls);
+    layout->addLayout(historiqueControls);
+    layout->addWidget(m_historiqueResume);
     layout->addWidget(m_plot, 1);
     layout->addWidget(alerteBox);
 
@@ -196,6 +241,194 @@ void SalleDetailWidget::onSalleMiseAJour(const QString& id)
     if (id != m_salleId || !m_source || !m_source->salles().contains(id))
         return;
     afficher(m_source->salles().value(id));
+}
+
+HistoryPeriod SalleDetailWidget::periodeSelectionnee() const
+{
+    if (!m_periode || m_periode->currentIndex() == 1)
+        return HistoryPeriod::Day;
+    if (m_periode->currentIndex() == 2)
+        return HistoryPeriod::Week;
+    return HistoryPeriod::Month;
+}
+
+void SalleDetailWidget::actualiserHistorique()
+{
+    if (!m_history || !m_historiqueResume || !m_periode)
+        return;
+
+    if (m_periode->currentIndex() == 0) {
+        if (m_source && m_source->salles().contains(m_salleId)) {
+            const Salle& salle = m_source->salles().value(m_salleId);
+            m_plot->setSeries(salle.occHist, salle.densHist, salle.entHist,
+                              salle.sortHist, salle.capacite, salle.timeHist);
+            m_plot->setPrevision(salle.penteTendance, salle.anticipationMin,
+                                 salle.capacite);
+        }
+        m_historiqueResume->setText(
+            QStringLiteral("Vue temps réel : %1 points en mémoire glissante.")
+                .arg(m_source && m_source->salles().contains(m_salleId)
+                         ? m_source->salles().value(m_salleId).occHist.size()
+                         : 0));
+        return;
+    }
+
+    const HistoryPeriod period = periodeSelectionnee();
+    const QVector<HistorySample> values = m_history->samples(m_salleId, period);
+    const HistoryStats stats = m_history->analyse(m_salleId, period);
+    const QList<Alerte> alertes = m_history->alertes(m_salleId, period);
+    QVector<double> occupation;
+    QVector<double> densite;
+    QVector<double> entrees;
+    QVector<double> sorties;
+    occupation.reserve(values.size());
+    densite.reserve(values.size());
+    entrees.reserve(values.size());
+    sorties.reserve(values.size());
+    for (const HistorySample& value : values) {
+        occupation.append(value.occupation);
+        densite.append(value.densite);
+        entrees.append(value.entrees);
+        sorties.append(value.sorties);
+    }
+    const int capacite = m_source && m_source->salles().contains(m_salleId)
+                             ? m_source->salles().value(m_salleId).capacite
+                             : 0;
+    m_plot->setHistoricalSeries(values, capacite);
+    m_plot->setPrevision(0.0, -1, capacite);
+    const QString pic = stats.aUnPic
+                            ? QDateTime::fromMSecsSinceEpoch(stats.pic.timestampMs)
+                                  .toString(QStringLiteral("dd/MM HH:mm"))
+                            : QStringLiteral("—");
+    const QString creux = stats.aUnCreux
+                              ? QDateTime::fromMSecsSinceEpoch(stats.creux.timestampMs)
+                                    .toString(QStringLiteral("dd/MM HH:mm"))
+                              : QStringLiteral("—");
+    m_historiqueResume->setText(
+        QStringLiteral("%1 : %2 points | occupation moyenne : %3 pers. | densité moyenne : %4 | "
+                       "entrées : %5 | sorties : %6 | alertes : %7 | pic : %8 (%9 pers.) | "
+                       "creux : %10 (%11 pers.)")
+            .arg(HistoryManager::libellePeriode(period))
+            .arg(stats.nombrePoints)
+            .arg(stats.occupationMoyenne, 0, 'f', 1)
+            .arg(stats.densiteMoyenne, 0, 'f', 2)
+            .arg(stats.nombreEntrees)
+            .arg(stats.nombreSorties)
+            .arg(alertes.size())
+            .arg(pic)
+            .arg(stats.aUnPic ? stats.pic.occupation : 0)
+            .arg(creux)
+            .arg(stats.aUnCreux ? stats.creux.occupation : 0));
+}
+
+void SalleDetailWidget::exporterCsv()
+{
+    if (!m_history || !m_periode)
+        return;
+    const HistoryPeriod period = periodeSelectionnee();
+    const QString path = QFileDialog::getSaveFileName(
+        this, QStringLiteral("Exporter l'historique de la salle"),
+        QStringLiteral("%1_%2.csv")
+            .arg(m_salleId, HistoryManager::libellePeriode(period).toLower()),
+        QStringLiteral("Fichiers CSV (*.csv)"));
+    if (path.isEmpty())
+        return;
+
+    QString error;
+    if (!m_history->exportSalleCsv(m_salleId, period, path, &error)) {
+        QMessageBox::warning(this, QStringLiteral("Export impossible"), error);
+        return;
+    }
+    QMessageBox::information(this, QStringLiteral("Export terminé"),
+                             QStringLiteral("Historique de la salle exporté."));
+}
+
+void SalleDetailWidget::exporterPdf()
+{
+    if (!m_history || !m_source || !m_source->salles().contains(m_salleId)
+        || !m_periode) {
+        return;
+    }
+
+    const HistoryPeriod period = periodeSelectionnee();
+    const QString path = QFileDialog::getSaveFileName(
+        this, QStringLiteral("Exporter le rapport de la salle"),
+        QStringLiteral("%1_%2.pdf")
+            .arg(m_salleId, HistoryManager::libellePeriode(period).toLower()),
+        QStringLiteral("Fichiers PDF (*.pdf)"));
+    if (path.isEmpty())
+        return;
+
+    QPrinter printer(QPrinter::HighResolution);
+    printer.setOutputFormat(QPrinter::PdfFormat);
+    printer.setOutputFileName(path);
+    QTextDocument document;
+    const Salle& salle = m_source->salles().value(m_salleId);
+    const HistoryStats stats = m_history->analyse(m_salleId, period);
+    const QVector<PassageEvent> passages = m_history->passages(m_salleId, period);
+    const QList<Alerte> alertes = m_history->alertes(m_salleId, period);
+    const QString title = salle.nom.isEmpty() ? salle.id
+                                              : QStringLiteral("%1 (%2)")
+                                                    .arg(salle.nom, salle.id);
+    QString passagesHtml;
+    for (const PassageEvent& passage : passages) {
+        passagesHtml += QStringLiteral("<tr><td>%1</td><td>%2</td><td>%3</td></tr>")
+                            .arg(QDateTime::fromMSecsSinceEpoch(passage.timestampMs)
+                                     .toString(QStringLiteral("dd/MM/yyyy HH:mm:ss")),
+                                 passage.direction,
+                                 QString::number(passage.occupation));
+    }
+    if (passagesHtml.isEmpty())
+        passagesHtml = QStringLiteral("<tr><td colspan=\"3\">Aucun passage</td></tr>");
+
+    QString alertesHtml;
+    for (const Alerte& alerte : alertes) {
+        alertesHtml += QStringLiteral("<tr><td>%1</td><td>%2</td><td>%3</td></tr>")
+                           .arg(QDateTime::fromMSecsSinceEpoch(qint64(alerte.ts))
+                                    .toString(QStringLiteral("dd/MM/yyyy HH:mm:ss")),
+                                alerte.typeLibelle(), alerte.detail.toHtmlEscaped());
+    }
+    if (alertesHtml.isEmpty())
+        alertesHtml = QStringLiteral("<tr><td colspan=\"3\">Aucune alerte</td></tr>");
+    document.setHtml(
+        QStringLiteral("<h1>Rapport historique — %1</h1>"
+                       "<p>Période : <b>%2</b><br/>Généré le : %3</p>"
+                       "<h2>Statistiques</h2>"
+                       "<ul><li>Points agrégés : %4</li>"
+                       "<li>Occupation moyenne : %5 personnes</li>"
+                       "<li>Densité moyenne : %6</li>"
+                       "<li>Entrées enregistrées : %7</li>"
+                       "<li>Sorties enregistrées : %8</li>"
+                       "<li>Pic d'occupation : %9 personnes</li>"
+                       "<li>Creux d'occupation : %10 personnes</li></ul>"
+                       "<h2>État courant</h2>"
+                       "<p>Occupation : %11<br/>Capacité : %12<br/>Densité : %13</p>"
+                       "<h2>Passages (%14)</h2>"
+                       "<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">"
+                       "<tr><th>Heure</th><th>Direction</th><th>Occupation</th></tr>%15</table>"
+                       "<h2>Alertes (%16)</h2>"
+                       "<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">"
+                       "<tr><th>Heure</th><th>Type</th><th>Détail</th></tr>%17</table>")
+            .arg(title)
+            .arg(HistoryManager::libellePeriode(period))
+            .arg(QDateTime::currentDateTime().toString(Qt::ISODate))
+            .arg(stats.nombrePoints)
+            .arg(stats.occupationMoyenne, 0, 'f', 1)
+            .arg(stats.densiteMoyenne, 0, 'f', 2)
+            .arg(stats.nombreEntrees)
+            .arg(stats.nombreSorties)
+            .arg(stats.aUnPic ? stats.pic.occupation : 0)
+            .arg(stats.aUnCreux ? stats.creux.occupation : 0)
+            .arg(salle.occupationTexte())
+            .arg(salle.capacite)
+            .arg(salle.densite, 0, 'f', 2)
+            .arg(passages.size())
+            .arg(passagesHtml)
+            .arg(alertes.size())
+            .arg(alertesHtml));
+    document.print(&printer);
+    QMessageBox::information(this, QStringLiteral("Export terminé"),
+                             QStringLiteral("Rapport PDF de la salle exporté."));
 }
 
 double SalleDetailWidget::debitInstantane(const Salle& salle) const
@@ -294,10 +527,11 @@ void SalleDetailWidget::afficher(const Salle& salle)
     }
 
     m_plot->setSeries(salle.occHist, salle.densHist, salle.entHist, salle.sortHist,
-                      salle.capacite);
+                      salle.capacite, salle.timeHist);
     m_plot->setPrevision(salle.penteTendance, salle.anticipationMin,
                          salle.capacite);
     actualiserAlertes();
+    actualiserHistorique();
 }
 
 void SalleDetailWidget::actualiserAlertes()

@@ -18,6 +18,9 @@ qt_add_executable(salles_manager
     models/AlerteModel.h
     models/Groupe.h
 
+    history/HistoryManager.h
+    history/HistoryManager.cpp
+
     engine/densite/DensiteEstimator.h
     engine/densite/DensiteEstimator.cpp
 
@@ -70,3 +73,21 @@ target_include_directories(salles_manager PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
+
+enable_testing()
+
+qt_add_executable(history_smoke
+    tests/HistoryManagerSmoke.cpp
+    history/HistoryManager.h
+    history/HistoryManager.cpp
+    models/Salle.h
+    models/Alerte.h
+)
+
+target_link_libraries(history_smoke PRIVATE Qt6::Core)
+target_include_directories(history_smoke PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+add_test(NAME history_smoke COMMAND history_smoke)

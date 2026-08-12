@@ -12,6 +12,7 @@
 #include <QVBoxLayout>
 
 #include "data/DataSource.h"
+#include "history/HistoryManager.h"
 #include "models/AlerteModel.h"
 #include "ui/AlertePanelWidget.h"
 #include "ui/SalleConfigWidget.h"
@@ -30,8 +31,17 @@ SallesWidget::SallesWidget(QWidget* parent)
 
     m_grid = new SalleGrid(this);
     m_config = new SalleConfigWidget(this);
+    m_history = new HistoryManager(QString(), this);
     m_modeleAlertes = new AlerteModel(this);
-    m_panelAlertes = new AlertePanelWidget(m_modeleAlertes, this);
+    m_modeleAlertes->charger(m_history->alertes());
+    m_panelAlertes = new AlertePanelWidget(m_modeleAlertes, m_history, this);
+
+    connect(m_modeleAlertes, &AlerteModel::alerteAjoutee, this,
+            [this](const Alerte& alerte) { m_history->recordAlerte(alerte); });
+    connect(m_modeleAlertes, &AlerteModel::alerteModifiee, this,
+            [this](const Alerte& alerte) { m_history->updateAlerte(alerte); });
+    connect(m_history, &HistoryManager::storageError, this,
+            [this](const QString& message) { emit statutChanged(message); });
 
     auto* left = new QWidget(this);
     left->setObjectName(QStringLiteral("sallesLeft"));
@@ -116,6 +126,7 @@ void SallesWidget::setSource(DataSource* source)
     }
 
     m_source = source;
+    m_history->resetLive();
     m_grid->viderVue();
     m_config->afficherCreation();
     if (!m_source)
@@ -131,6 +142,7 @@ void SallesWidget::onSalleAjoutee(const QString& id)
     if (!m_source || !m_source->salles().contains(id))
         return;
     const Salle salle = m_source->salles().value(id);
+    m_history->recordSalle(salle);
     m_groupeSalle.insert(id, salle.groupeId);
     if (salle.groupeId.isEmpty())
         m_grid->majSalle(salle);
@@ -147,6 +159,7 @@ void SallesWidget::onSalleMiseAJour(const QString& id)
     if (!m_source || !m_source->salles().contains(id))
         return;
     const Salle salle = m_source->salles().value(id);
+    m_history->recordSalle(salle);
     m_groupeSalle.insert(id, salle.groupeId);
     if (salle.groupeId.isEmpty())
         m_grid->majSalle(salle);
@@ -335,7 +348,7 @@ void SallesWidget::onCourbeDemandee(const Salle& salle)
     m_detailDialog->resize(980, 700);
 
     auto* detail = new SalleDetailWidget(m_source, salle.id, m_modeleAlertes,
-                                         m_detailDialog);
+                                          m_history, m_detailDialog);
     auto* close = new QDialogButtonBox(QDialogButtonBox::Close, m_detailDialog);
     connect(close, &QDialogButtonBox::rejected,
             m_detailDialog, &QDialog::reject);
@@ -387,6 +400,15 @@ void SallesWidget::onHauteurMesuree(const QString& id, double centimetres,
                                .arg(centimetres, 0, 'f', 1));
 }
 
+void SallesWidget::onPassageValide(const QString& salleId, const QString& direction,
+                                   qint64 timestampMs)
+{
+    if (!m_source || !m_source->salles().contains(salleId))
+        return;
+    m_history->recordPassage(salleId, direction, timestampMs,
+                             m_source->salles().value(salleId));
+}
+
 void SallesWidget::connecterSource(DataSource* source)
 {
     connect(source, &DataSource::salleAjoutee,
@@ -403,6 +425,8 @@ void SallesWidget::connecterSource(DataSource* source)
             this, &SallesWidget::onGroupeMiseAJour);
     connect(source, &DataSource::hauteurPorteMesuree,
             this, &SallesWidget::onHauteurMesuree);
+    connect(source, &DataSource::passageValide,
+            this, &SallesWidget::onPassageValide);
     connect(source, &DataSource::erreur,
             this, &SallesWidget::onSourceErreur);
     connect(source, &DataSource::logAppend,
@@ -424,6 +448,7 @@ void SallesWidget::synchroniserSalles()
     if (!m_source)
         return;
     for (const Salle& salle : m_source->salles()) {
+        m_history->recordSalle(salle);
         m_groupeSalle.insert(salle.id, salle.groupeId);
         if (salle.groupeId.isEmpty())
             m_grid->majSalle(salle);

@@ -15,6 +15,26 @@ source de données et intègre directement la vue détaillée et QCustomPlot.
 - Vue détaillée intégrée avec occupation, débit, compteurs et historiques.
 - Courbe QCustomPlot alimentée directement par la source active.
 - Source MQTT avec statut d'attente de confirmation.
+- Historique persistant par salle : séries agrégées à la minute, passages
+  horodatés et alertes rechargées au démarrage.
+- Chargement des historiques Jour/Semaine/Mois et exports CSV/PDF depuis le
+  détail d'une salle ; export CSV global depuis le panneau d'alertes.
+
+## Stockage de l'historique
+
+Les fichiers sont enregistrés dans le répertoire Qt
+`QStandardPaths::AppDataLocation/history` :
+
+- `salle_<id>_history.csv` : un point agrégé par minute ;
+- `salle_<id>_passages.csv` : passages individuels validés, avec horodatage ;
+- `alertes_history.csv` : alertes, statut d'acquittement et métadonnées d'appel.
+
+Le buffer RAM glissant reste utilisé pour la vue temps réel. Les périodes
+Jour/Semaine/Mois relisent les séries CSV à la demande.
+
+Les lectures répétées d'un même fichier sont servies par un cache mémoire
+invalidé automatiquement lorsque le fichier change. Les passages sont écrits
+par lots pour limiter les ouvertures de fichiers lors d'un flux important.
 
 ## Compilation autonome
 

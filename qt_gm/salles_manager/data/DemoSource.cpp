@@ -89,6 +89,7 @@ void DemoSource::modifierSalle(const Salle& salle)
     updated.densHist = previous.densHist;
     updated.entHist = previous.entHist;
     updated.sortHist = previous.sortHist;
+    updated.timeHist = previous.timeHist;
     updated.fluxSortieHist = previous.fluxSortieHist;
     updated.fluxSortieAnormal = previous.fluxSortieAnormal;
     updated.derniereAlerteFluxSortieMs = previous.derniereAlerteFluxSortieMs;
@@ -198,9 +199,17 @@ void DemoSource::onTick()
             if (pas > 0) {
                 s.occupation = qMin(s.capacite, s.occupation + pas);
                 s.nbEntrees += pas;
+                for (int i = 0; i < pas; ++i) {
+                    emit passageValide(s.id, QStringLiteral("entree"),
+                                       QDateTime::currentMSecsSinceEpoch());
+                }
             } else {
                 s.occupation = qMax(0, s.occupation + pas);
                 s.nbSorties += -pas;
+                for (int i = 0; i < -pas; ++i) {
+                    emit passageValide(s.id, QStringLiteral("sortie"),
+                                       QDateTime::currentMSecsSinceEpoch());
+                }
             }
         }
 

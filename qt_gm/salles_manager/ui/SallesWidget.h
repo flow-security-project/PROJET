@@ -11,6 +11,7 @@
 class AlerteModel;
 class AlertePanelWidget;
 class DataSource;
+class HistoryManager;
 class QDialog;
 class QLabel;
 class SalleConfigWidget;
@@ -53,6 +54,8 @@ private slots:
     void onSourceLog(const QString& message);
     void onHauteurMesuree(const QString& id, double centimetres,
                           bool succes, const QString& note);
+    void onPassageValide(const QString& salleId, const QString& direction,
+                         qint64 timestampMs);
 
 private:
     void connecterSource(DataSource* source);
@@ -63,6 +66,7 @@ private:
     void confirmerSuppressionSalle(const QString& id);
 
     DataSource* m_source = nullptr;
+    HistoryManager* m_history = nullptr;
     SalleGrid* m_grid = nullptr;
     SalleConfigWidget* m_config = nullptr;
     AlerteModel* m_modeleAlertes = nullptr;

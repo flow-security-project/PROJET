@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <QtMath>
 
 #include <QString>
 #include <QVector>
+#include <QDateTime>
 
 #include "models/Groupe.h"
 
@@ -50,6 +52,7 @@ struct Salle
     QVector<double> densHist;
     QVector<double> entHist;
     QVector<double> sortHist;
+    QVector<qint64> timeHist;
 
     QVector<double> fluxSortieHist;
     bool fluxSortieAnormal = false;
@@ -146,8 +149,11 @@ struct Salle
         }
     }
 
-    void pushHistorique()
+    void pushHistorique(qint64 timestampMs = 0)
     {
+        if (timestampMs <= 0)
+            timestampMs = QDateTime::currentMSecsSinceEpoch();
+        timeHist.append(timestampMs);
         occHist.append(occupation >= 0 ? double(occupation) : 0.0);
         densHist.append(densite);
         entHist.append(double(nbEntrees));
@@ -162,6 +168,8 @@ struct Salle
             entHist.removeFirst();
         while (sortHist.size() > maxPoints)
             sortHist.removeFirst();
+        while (timeHist.size() > maxPoints)
+            timeHist.removeFirst();
     }
 
     QString occupationTexte() const

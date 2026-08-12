@@ -3,6 +3,8 @@
 #include <QVector>
 #include <QWidget>
 
+#include "history/HistoryManager.h"
+
 class QCPGraph;
 class QCPItemStraightLine;
 class QCPItemText;
@@ -19,7 +21,9 @@ public:
                    const QVector<double>& densite,
                    const QVector<double>& entrees,
                    const QVector<double>& sorties,
-                   int capacite);
+                   int capacite,
+                   const QVector<qint64>& timestamps = {});
+    void setHistoricalSeries(const QVector<HistorySample>& samples, int capacite);
     void setPrevision(double pentePersMin, int anticipationMin, int capacite);
     void setGraphVisible(int index, bool visible);
     void setPause(bool pause);
@@ -39,4 +43,5 @@ private:
     QCPItemText* m_repSaturation = nullptr;
     int m_fenetre = 120;
     bool m_paused = false;
+    bool m_timeBased = false;
 };

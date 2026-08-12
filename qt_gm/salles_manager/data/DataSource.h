@@ -47,6 +47,8 @@ signals:
     void statutSource(bool connecte, const QString& note);
     void logAppend(const QString& ligne);
     void erreur(const QString& message);
+    void passageValide(const QString& salleId, const QString& direction,
+                       qint64 timestampMs);
     void alerte(const Alerte& alerte);
 
 protected:

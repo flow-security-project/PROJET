@@ -102,6 +102,7 @@ void MqttSource::modifierSalle(const Salle& salle)
     updated.densHist = previous.densHist;
     updated.entHist = previous.entHist;
     updated.sortHist = previous.sortHist;
+    updated.timeHist = previous.timeHist;
     updated.fluxSortieHist = previous.fluxSortieHist;
     updated.fluxSortieAnormal = previous.fluxSortieAnormal;
     updated.derniereAlerteFluxSortieMs = previous.derniereAlerteFluxSortieMs;
@@ -262,11 +263,15 @@ void MqttSource::onMessage(const QString& topic, const QByteArray& payload)
             ++salle.nbEntrees;
             if (salle.occupation >= 0)
                 salle.occupation = qMin(salle.capacite, salle.occupation + 1);
+            emit passageValide(id, QStringLiteral("entree"),
+                               QDateTime::currentMSecsSinceEpoch());
         } else if (event == QStringLiteral("depart")) {
             ++salle.nbSorties;
             if (salle.occupation >= 0)
                 salle.occupation = qMax(0, salle.occupation - 1);
-            m_departTimes[id].append(QDateTime::currentMSecsSinceEpoch());
+            const qint64 timestampMs = QDateTime::currentMSecsSinceEpoch();
+            emit passageValide(id, QStringLiteral("sortie"), timestampMs);
+            m_departTimes[id].append(timestampMs);
             verifierFluxSortie(id);
         }
     } else if (suffix == QStringLiteral("raw/env")) {
