@@ -14,6 +14,7 @@ class DataSource;
 class HistoryManager;
 class QDialog;
 class QLabel;
+class QPushButton;
 class SalleConfigWidget;
 class SalleGrid;
 class StadeWidget;
@@ -56,6 +57,7 @@ private slots:
                           bool succes, const QString& note);
     void onPassageValide(const QString& salleId, const QString& direction,
                          qint64 timestampMs);
+    void onDemoRapide();
 
 private:
     void connecterSource(DataSource* source);
@@ -72,6 +74,7 @@ private:
     AlerteModel* m_modeleAlertes = nullptr;
     AlertePanelWidget* m_panelAlertes = nullptr;
     QLabel* m_status = nullptr;
+    QPushButton* m_boutonDemoRapide = nullptr;
     QPointer<QDialog> m_detailDialog;
     QPointer<StadeWidget> m_stadeDialog;
     QHash<QString, QString> m_groupeSalle;  // id salle -> id groupe (avant suppression)

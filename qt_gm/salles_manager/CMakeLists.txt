@@ -30,6 +30,9 @@ qt_add_executable(salles_manager
     engine/flux/FluxOrchestrator.h
     engine/flux/FluxOrchestrator.cpp
 
+    engine/passage/PassageDetectorAB.h
+    engine/passage/PassageDetectorAB.cpp
+
     data/DataSource.h
     data/DataSource.cpp
     data/DemoSource.h
@@ -43,6 +46,8 @@ qt_add_executable(salles_manager
     ../vendor/qcustomplot.cpp
     ui/IntegratedPlotWidget.h
     ui/IntegratedPlotWidget.cpp
+    ui/AbSystemWidget.h
+    ui/AbSystemWidget.cpp
     ui/JaugeSaturation.h
     ui/JaugeSaturation.cpp
     ui/SalleDetailWidget.h

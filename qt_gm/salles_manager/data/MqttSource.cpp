@@ -10,8 +10,14 @@
 
 #include "engine/densite/DensiteEstimator.h"
 #include "engine/flux/FluxOrchestrator.h"
+#include "engine/passage/PassageDetectorAB.h"
 #include "engine/securite/IntrusionDetector.h"
 #include "models/Alerte.h"
+
+namespace {
+constexpr double AB_HAUTEUR_DEFAUT_CM = 210.0; // hauteur de porte si non mesurée
+constexpr double AB_MARGE_HAUTEUR_CM = 20.0;   // marge sous le linteau pour "bloqué"
+}
 
 MqttSource::MqttSource(QObject* parent)
     : DataSource(parent)
@@ -34,6 +40,7 @@ MqttSource::~MqttSource()
 {
     qDeleteAll(m_densite);
     qDeleteAll(m_intrusion);
+    qDeleteAll(m_detecteursPassage);
 }
 
 void MqttSource::start()
@@ -77,6 +84,7 @@ void MqttSource::creerSalle(const Salle& salle)
     m_salles.insert(pending.id, pending);
     preparerDensite(pending.id);
     preparerSecurite(pending.id);
+    preparerPassageAB(pending.id);
     emit salleAjoutee(pending.id);
     publierConfiguration(pending);
     emit logAppend(QStringLiteral("SALLE %1 créée localement — confirmation MQTT attendue")
@@ -126,6 +134,8 @@ void MqttSource::supprimerSalle(const QString& id)
     m_salles.remove(id);
     m_departTimes.remove(id);
     m_dernieresCiblesFlux.remove(id);
+    if (auto* detecteur = m_detecteursPassage.take(id))
+        delete detecteur;
     if (auto* estimateur = m_densite.take(id)) {
         delete estimateur;
     }
@@ -245,6 +255,15 @@ void MqttSource::onMessage(const QString& topic, const QByteArray& payload)
                                               tMs > 0 ? tMs
                                                       : QDateTime::currentMSecsSinceEpoch());
         }
+        if (m_salles.contains(id)) {
+            const Salle& salle = m_salles.value(id);
+            const double hauteurCm = salle.hauteurPorteMesuree && salle.hauteurPorteCm > 0.0
+                                         ? salle.hauteurPorteCm
+                                         : AB_HAUTEUR_DEFAUT_CM;
+            const bool bloque = status != 4 && millimetres > 0.0
+                                && millimetres / 10.0 < hauteurCm - AB_MARGE_HAUTEUR_CM;
+            majEtatToF(id, bloque, tMs > 0 ? tMs : QDateTime::currentMSecsSinceEpoch());
+        }
         return;
     }
 
@@ -260,20 +279,10 @@ void MqttSource::onMessage(const QString& topic, const QByteArray& payload)
     } else if (suffix == QStringLiteral("raw/ultrason")) {
         const QString event = object.value(QStringLiteral("event")).toString();
         if (event == QStringLiteral("presence")) {
-            ++salle.nbEntrees;
-            if (salle.occupation >= 0)
-                salle.occupation = qMin(salle.capacite, salle.occupation + 1);
-            emit passageValide(id, QStringLiteral("entree"),
-                               QDateTime::currentMSecsSinceEpoch());
-        } else if (event == QStringLiteral("depart")) {
-            ++salle.nbSorties;
-            if (salle.occupation >= 0)
-                salle.occupation = qMax(0, salle.occupation - 1);
-            const qint64 timestampMs = QDateTime::currentMSecsSinceEpoch();
-            emit passageValide(id, QStringLiteral("sortie"), timestampMs);
-            m_departTimes[id].append(timestampMs);
-            verifierFluxSortie(id);
+            const qint64 tMs = qint64(object.value(QStringLiteral("t_ms")).toDouble(0.0));
+            declencherB(id, tMs > 0 ? tMs : QDateTime::currentMSecsSinceEpoch());
         }
+        // "depart" : information seule — la sortie est validée par la séquence B→A.
     } else if (suffix == QStringLiteral("raw/env")) {
         // The current room model keeps the aggregate state; environmental data
         // remains available for the future safety widgets.
@@ -321,6 +330,7 @@ void MqttSource::onMesureTimeout()
 void MqttSource::onWatchdogTimeout()
 {
     const qint64 maintenant = QDateTime::currentMSecsSinceEpoch();
+    verifierExpirationAB(maintenant);
     for (auto it = m_salles.begin(); it != m_salles.end(); ++it) {
         Salle& salle = it.value();
         if (salle.enAttente)
@@ -542,6 +552,88 @@ void MqttSource::verifierIntrusion(const QString& salleId, qint64 maintenantMs)
     a.appelCible = QStringLiteral("Agent surveillance");
     emit alerte(a);
     emit logAppend(QStringLiteral("ALERTE F11 — %1 : %2").arg(salle.id, a.detail));
+}
+
+void MqttSource::preparerPassageAB(const QString& salleId)
+{
+    if (m_detecteursPassage.contains(salleId))
+        return;
+
+    auto* detecteur = new PassageDetectorAB();
+    connect(detecteur, &PassageDetectorAB::passageValide, this,
+            [this, salleId](const QString& direction) {
+                emit etatAB(salleId, QStringLiteral("attente"),
+                            QDateTime::currentMSecsSinceEpoch());
+                validerPassage(salleId, direction);
+            });
+    connect(detecteur, &PassageDetectorAB::capteurAActive, this,
+            [this, salleId] {
+                emit etatAB(salleId, QStringLiteral("vu_a"),
+                            QDateTime::currentMSecsSinceEpoch());
+                emit logAppend(QStringLiteral("PASSAGE A-B — %1 : capteur A activé (ToF)")
+                                   .arg(salleId));
+            });
+    connect(detecteur, &PassageDetectorAB::capteurBActive, this,
+            [this, salleId] {
+                emit etatAB(salleId, QStringLiteral("vu_b"),
+                            QDateTime::currentMSecsSinceEpoch());
+                emit logAppend(QStringLiteral("PASSAGE A-B — %1 : capteur B activé "
+                                              "(ultrason)")
+                                   .arg(salleId));
+            });
+    connect(detecteur, &PassageDetectorAB::sequenceAnnulee, this,
+            [this, salleId] {
+                emit etatAB(salleId, QStringLiteral("attente"),
+                            QDateTime::currentMSecsSinceEpoch());
+                emit logAppend(QStringLiteral("PASSAGE A-B — %1 : séquence annulée "
+                                              "(délai dépassé)")
+                                   .arg(salleId));
+            });
+    m_detecteursPassage.insert(salleId, detecteur);
+}
+
+void MqttSource::majEtatToF(const QString& salleId, bool bloque, qint64 tMs)
+{
+    if (PassageDetectorAB* detecteur = m_detecteursPassage.value(salleId))
+        detecteur->majToF(bloque, tMs);
+}
+
+void MqttSource::declencherB(const QString& salleId, qint64 tMs)
+{
+    if (PassageDetectorAB* detecteur = m_detecteursPassage.value(salleId))
+        detecteur->declencherUltrason(tMs);
+}
+
+void MqttSource::validerPassage(const QString& salleId, const QString& direction)
+{
+    if (!m_salles.contains(salleId))
+        return;
+
+    Salle& salle = m_salles[salleId];
+    const qint64 maintenant = QDateTime::currentMSecsSinceEpoch();
+    if (direction == QStringLiteral("entree")) {
+        ++salle.nbEntrees;
+        if (salle.occupation >= 0)
+            salle.occupation = qMin(salle.capacite, salle.occupation + 1);
+        emit logAppend(QStringLiteral("PASSAGE A-B — %1 : ENTRÉE confirmée (A→B)")
+                           .arg(salleId));
+    } else {
+        ++salle.nbSorties;
+        if (salle.occupation >= 0)
+            salle.occupation = qMax(0, salle.occupation - 1);
+        m_departTimes[salleId].append(maintenant);
+        verifierFluxSortie(salleId);
+        emit logAppend(QStringLiteral("PASSAGE A-B — %1 : SORTIE confirmée (B→A)")
+                           .arg(salleId));
+    }
+    emit passageValide(salleId, direction, maintenant);
+    emit salleMiseAJour(salleId);
+}
+
+void MqttSource::verifierExpirationAB(qint64 maintenantMs)
+{
+    for (auto it = m_detecteursPassage.cbegin(); it != m_detecteursPassage.cend(); ++it)
+        it.value()->verifierExpiration(maintenantMs);
 }
 
 double MqttSource::mediane(QVector<double> valeurs)

@@ -7,6 +7,7 @@
 
 class DensiteEstimator;
 class IntrusionDetector;
+class PassageDetectorAB;
 
 class DemoSource : public DataSource
 {
@@ -30,6 +31,9 @@ private slots:
     void onTick();
 
 private:
+    void preparerPassageAB(const QString& salleId);
+    void simulerEntree(const QString& salleId);
+    void simulerSortie(const QString& salleId);
     void simulerTof(Salle& salle, qint64 maintenantMs);
     void verifierIntrusion(const QString& salleId, qint64 maintenantMs);
     void majDecisionsFlux();
@@ -39,6 +43,7 @@ private:
     QHash<QString, double> m_fluxAccum;
     QHash<QString, DensiteEstimator*> m_densite;
     QHash<QString, IntrusionDetector*> m_intrusion;
+    QHash<QString, PassageDetectorAB*> m_detecteursPassage;
     QHash<QString, qint64> m_dernierTofMs;
     QHash<QString, bool> m_presenceToF;
     QHash<QString, QString> m_dernieresCiblesFlux;

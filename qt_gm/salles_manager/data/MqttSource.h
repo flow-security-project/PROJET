@@ -8,6 +8,7 @@
 
 class DensiteEstimator;
 class IntrusionDetector;
+class PassageDetectorAB;
 
 class MqttSource : public DataSource
 {
@@ -44,9 +45,14 @@ private:
     void finaliserMesure(bool succes, const QString& note);
     void preparerDensite(const QString& salleId);
     void preparerSecurite(const QString& salleId);
+    void preparerPassageAB(const QString& salleId);
     void verifierFluxSortie(const QString& salleId);
     void verifierIntrusion(const QString& salleId, qint64 maintenantMs);
     void majDecisionsFlux();
+    void majEtatToF(const QString& salleId, bool bloque, qint64 tMs);
+    void declencherB(const QString& salleId, qint64 tMs);
+    void validerPassage(const QString& salleId, const QString& direction);
+    void verifierExpirationAB(qint64 maintenantMs);
     static double mediane(QVector<double> valeurs);
 
     MqttClient m_client;
@@ -55,6 +61,7 @@ private:
     QString m_mesureId;
     QVector<double> m_mesuresMm;
     QHash<QString, QVector<qint64>> m_departTimes;
+    QHash<QString, PassageDetectorAB*> m_detecteursPassage;
     QHash<QString, DensiteEstimator*> m_densite;
     QHash<QString, IntrusionDetector*> m_intrusion;
     QHash<QString, QString> m_dernieresCiblesFlux;

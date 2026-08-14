@@ -49,6 +49,8 @@ signals:
     void erreur(const QString& message);
     void passageValide(const QString& salleId, const QString& direction,
                        qint64 timestampMs);
+    void etatAB(const QString& salleId, const QString& etat,
+                qint64 timestampMs);
     void alerte(const Alerte& alerte);
 
 protected:

@@ -7,6 +7,7 @@
 
 #include "engine/densite/DensiteEstimator.h"
 #include "engine/flux/FluxOrchestrator.h"
+#include "engine/passage/PassageDetectorAB.h"
 #include "engine/securite/IntrusionDetector.h"
 #include "models/Alerte.h"
 
@@ -21,6 +22,7 @@ DemoSource::~DemoSource()
 {
     qDeleteAll(m_densite);
     qDeleteAll(m_intrusion);
+    qDeleteAll(m_detecteursPassage);
 }
 
 void DemoSource::start()
@@ -64,6 +66,8 @@ void DemoSource::creerSalle(const Salle& salle)
     auto* detecteur = new IntrusionDetector();
     detecteur->setHoraires(s.horaireDebut, s.horaireFin);
     m_intrusion.insert(s.id, detecteur);
+
+    preparerPassageAB(s.id);
 
     m_salles.insert(s.id, s);
     emit salleAjoutee(s.id);
@@ -120,6 +124,8 @@ void DemoSource::supprimerSalle(const QString& id)
     m_dernierTofMs.remove(id);
     m_presenceToF.remove(id);
     m_dernieresCiblesFlux.remove(id);
+    if (auto* detecteur = m_detecteursPassage.take(id))
+        delete detecteur;
     if (auto* estimateur = m_densite.take(id))
         delete estimateur;
     if (auto* detecteur = m_intrusion.take(id))
@@ -197,19 +203,11 @@ void DemoSource::onTick()
         if (pas != 0) {
             accum -= double(pas);
             if (pas > 0) {
-                s.occupation = qMin(s.capacite, s.occupation + pas);
-                s.nbEntrees += pas;
-                for (int i = 0; i < pas; ++i) {
-                    emit passageValide(s.id, QStringLiteral("entree"),
-                                       QDateTime::currentMSecsSinceEpoch());
-                }
+                for (int i = 0; i < pas; ++i)
+                    simulerEntree(s.id);
             } else {
-                s.occupation = qMax(0, s.occupation + pas);
-                s.nbSorties += -pas;
-                for (int i = 0; i < -pas; ++i) {
-                    emit passageValide(s.id, QStringLiteral("sortie"),
-                                       QDateTime::currentMSecsSinceEpoch());
-                }
+                for (int i = 0; i < -pas; ++i)
+                    simulerSortie(s.id);
             }
         }
 
@@ -314,6 +312,86 @@ void DemoSource::verifierIntrusion(const QString& salleId, qint64 maintenantMs)
     a.appelCible = QStringLiteral("Agent surveillance");
     emit alerte(a);
     emit logAppend(QStringLiteral("ALERTE F11 — %1 : %2").arg(s.id, a.detail));
+}
+
+void DemoSource::preparerPassageAB(const QString& salleId)
+{
+    if (m_detecteursPassage.contains(salleId))
+        return;
+
+    auto* detecteur = new PassageDetectorAB();
+    connect(detecteur, &PassageDetectorAB::passageValide, this,
+            [this, salleId](const QString& direction) {
+                if (!m_salles.contains(salleId))
+                    return;
+                Salle& s = m_salles[salleId];
+                const qint64 t = QDateTime::currentMSecsSinceEpoch();
+                emit etatAB(salleId, QStringLiteral("attente"), t);
+                if (direction == QStringLiteral("entree")) {
+                    s.occupation = qMin(s.capacite, s.occupation + 1);
+                    ++s.nbEntrees;
+                    emit passageValide(salleId, QStringLiteral("entree"), t);
+                    emit logAppend(QStringLiteral(
+                                       "PASSAGE A-B — %1 : ENTRÉE confirmée (A→B)")
+                                       .arg(salleId));
+                } else {
+                    s.occupation = qMax(0, s.occupation - 1);
+                    ++s.nbSorties;
+                    emit passageValide(salleId, QStringLiteral("sortie"), t);
+                    emit logAppend(QStringLiteral(
+                                       "PASSAGE A-B — %1 : SORTIE confirmée (B→A)")
+                                       .arg(salleId));
+                }
+                emit salleMiseAJour(salleId);
+            });
+    connect(detecteur, &PassageDetectorAB::capteurAActive, this,
+            [this, salleId] {
+                emit etatAB(salleId, QStringLiteral("vu_a"),
+                            QDateTime::currentMSecsSinceEpoch());
+                emit logAppend(QStringLiteral("PASSAGE A-B — %1 : capteur A activé (ToF)")
+                                   .arg(salleId));
+            });
+    connect(detecteur, &PassageDetectorAB::capteurBActive, this,
+            [this, salleId] {
+                emit etatAB(salleId, QStringLiteral("vu_b"),
+                            QDateTime::currentMSecsSinceEpoch());
+                emit logAppend(QStringLiteral("PASSAGE A-B — %1 : capteur B activé "
+                                              "(ultrason)")
+                                   .arg(salleId));
+            });
+    connect(detecteur, &PassageDetectorAB::sequenceAnnulee, this,
+            [this, salleId] {
+                emit etatAB(salleId, QStringLiteral("attente"),
+                            QDateTime::currentMSecsSinceEpoch());
+                emit logAppend(QStringLiteral("PASSAGE A-B — %1 : séquence annulée "
+                                              "(délai dépassé)")
+                                   .arg(salleId));
+            });
+    m_detecteursPassage.insert(salleId, detecteur);
+}
+
+void DemoSource::simulerEntree(const QString& salleId)
+{
+    PassageDetectorAB* detecteur = m_detecteursPassage.value(salleId);
+    if (!detecteur)
+        return;
+    const qint64 t = QDateTime::currentMSecsSinceEpoch();
+    detecteur->majToF(false, t);          // ToF dégagé (fin du passage précédent)
+    detecteur->majToF(true, t);           // capteur A : ToF bloqué (devant)
+    detecteur->majToF(true, t);           // debounce (2 échantillons consécutifs)
+    detecteur->declencherUltrason(t);     // capteur B : présence (derrière)
+}
+
+void DemoSource::simulerSortie(const QString& salleId)
+{
+    PassageDetectorAB* detecteur = m_detecteursPassage.value(salleId);
+    if (!detecteur)
+        return;
+    const qint64 t = QDateTime::currentMSecsSinceEpoch();
+    detecteur->majToF(false, t);          // ToF dégagé (fin du passage précédent)
+    detecteur->declencherUltrason(t);     // capteur B : présence d'abord
+    detecteur->majToF(true, t);           // capteur A : ToF bloqué ensuite
+    detecteur->majToF(true, t);           // debounce
 }
 
 void DemoSource::simulerTof(Salle& salle, qint64 maintenantMs)

@@ -20,6 +20,7 @@
 #include "history/HistoryManager.h"
 #include "models/Alerte.h"
 #include "models/AlerteModel.h"
+#include "ui/AbSystemWidget.h"
 #include "ui/IntegratedPlotWidget.h"
 #include "ui/JaugeSaturation.h"
 
@@ -83,6 +84,8 @@ SalleDetailWidget::SalleDetailWidget(DataSource* source, const QString& salleId,
 
     m_infos = new QLabel(this);
     m_infos->setObjectName(QStringLiteral("detailInfos"));
+
+    m_abSystem = new AbSystemWidget(this);
 
     m_alerteFlux = new QLabel(QStringLiteral("FLUX SORTIE ANORMAL — sortie brusque détectée"), this);
     m_alerteFlux->setObjectName(QStringLiteral("alerteFluxBadge"));
@@ -221,6 +224,7 @@ SalleDetailWidget::SalleDetailWidget(DataSource* source, const QString& salleId,
     layout->addLayout(heading);
     layout->addLayout(kpis);
     layout->addWidget(m_infos);
+    layout->addWidget(m_abSystem);
     layout->addWidget(m_alerteFlux);
     layout->addWidget(m_alerteIntrusion);
     layout->addWidget(anticipationBox);
@@ -232,6 +236,16 @@ SalleDetailWidget::SalleDetailWidget(DataSource* source, const QString& salleId,
 
     connect(m_source, &DataSource::salleMiseAJour,
             this, &SalleDetailWidget::onSalleMiseAJour);
+    connect(m_source, &DataSource::etatAB, this,
+            [this](const QString& id, const QString& etat, qint64 tMs) {
+                if (id == m_salleId)
+                    m_abSystem->setEtat(etat, tMs);
+            });
+    connect(m_source, &DataSource::passageValide, this,
+            [this](const QString& id, const QString& direction, qint64 tMs) {
+                if (id == m_salleId)
+                    m_abSystem->setDernierPassage(direction, tMs);
+            });
     if (m_source && m_source->salles().contains(m_salleId))
         afficher(m_source->salles().value(m_salleId));
 }

@@ -6,6 +6,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QScrollArea>
 #include <QSplitter>
 #include <QTime>
@@ -78,7 +79,24 @@ SallesWidget::SallesWidget(QWidget* parent)
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(10, 8, 10, 10);
     layout->setSpacing(5);
-    layout->addWidget(m_status);
+
+    auto* header = new QHBoxLayout;
+    header->setContentsMargins(0, 0, 0, 0);
+    header->addWidget(m_status);
+    header->addStretch();
+    m_boutonDemoRapide = new QPushButton(
+        QStringLiteral("Salles de démonstration"), this);
+    m_boutonDemoRapide->setObjectName(QStringLiteral("btnDemoRapide"));
+    m_boutonDemoRapide->setToolTip(QStringLiteral(
+        "Crée instantanément 5 salles fictives animées (Amphi A, Labo Info, "
+        "TD Maths, Salle Réunion, Salle Évacuée) pour présenter la "
+        "supervision en mode démo."));
+    m_boutonDemoRapide->setVisible(false);
+    connect(m_boutonDemoRapide, &QPushButton::clicked,
+            this, &SallesWidget::onDemoRapide);
+    header->addWidget(m_boutonDemoRapide);
+
+    layout->addLayout(header);
     layout->addWidget(splitterVertical, 1);
 
     connect(m_grid, &SalleGrid::salleSelectionnee,
@@ -129,12 +147,15 @@ void SallesWidget::setSource(DataSource* source)
     m_history->resetLive();
     m_grid->viderVue();
     m_config->afficherCreation();
-    if (!m_source)
+    if (!m_source) {
+        m_boutonDemoRapide->setVisible(false);
         return;
+    }
 
     connecterSource(m_source);
     m_source->start();
     synchroniserSalles();
+    m_boutonDemoRapide->setVisible(m_source->type() == QStringLiteral("demo"));
 }
 
 void SallesWidget::onSalleAjoutee(const QString& id)
@@ -407,6 +428,69 @@ void SallesWidget::onPassageValide(const QString& salleId, const QString& direct
         return;
     m_history->recordPassage(salleId, direction, timestampMs,
                              m_source->salles().value(salleId));
+}
+
+void SallesWidget::onDemoRapide()
+{
+    if (!m_source || m_source->type() != QStringLiteral("demo"))
+        return;
+
+    struct ModeleDemo
+    {
+        QString nom;
+        int capacite = 30;
+        int scenario = 0;   // 0 lente · 1 rapide · 2 va-et-vient · 4 F3 · 5 F11
+        bool evacuation = false;
+    };
+    const QList<ModeleDemo> modeles = {
+        { QStringLiteral("Amphi A"),        120, 1,  false },
+        { QStringLiteral("Labo Info"),       30, 0,  false },
+        { QStringLiteral("TD Maths"),        30, 2,  false },
+        { QStringLiteral("Salle Réunion"),   12, 4,  false },
+        { QStringLiteral("Salle Évacuée"),  130, 1,  true  },
+    };
+
+    // Recherche d'un id libre dont le scénario démo correspond au modèle
+    // (la démo choisit le scénario via qHash(id) % 6).
+    auto chercherId = [this](int scenario, int depart) -> QString {
+        for (int i = depart; i < depart + 80; ++i) {
+            const QString candidat = QStringLiteral("B%1").arg(i, 3, 10, QLatin1Char('0'));
+            if (int(qHash(candidat)) % 6 != scenario)
+                continue;
+            if (!m_source->salles().contains(candidat))
+                return candidat;
+        }
+        return QString();
+    };
+
+    int creees = 0;
+    int ignorees = 0;
+    for (const ModeleDemo& modele : modeles) {
+        QString id = chercherId(modele.scenario, 200);
+        if (id.isEmpty() || m_source->salles().contains(id)) {
+            ++ignorees;
+            continue;
+        }
+        Salle s;
+        s.id = id;
+        s.nom = modele.nom;
+        s.capacite = modele.capacite;
+        s.horaireDebut = QStringLiteral("07:00");
+        s.horaireFin = QStringLiteral("22:00");
+        s.hauteurPorteMesuree = true;
+        s.hauteurPorteCm = 210.0;
+        s.evacuationActive = modele.evacuation;
+        m_source->creerSalle(s);
+        ++creees;
+    }
+
+    emit statutChanged(creees > 0
+                           ? QStringLiteral("Démo rapide : %1 salle(s) créée(s) (%2 déjà "
+                                            "présente(s))")
+                                 .arg(creees)
+                                 .arg(ignorees)
+                           : QStringLiteral("Démo rapide : toutes les salles sont déjà "
+                                            "présentes"));
 }
 
 void SallesWidget::connecterSource(DataSource* source)

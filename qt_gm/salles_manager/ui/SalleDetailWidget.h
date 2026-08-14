@@ -5,6 +5,7 @@
 #include "models/Salle.h"
 
 class AlerteModel;
+class AbSystemWidget;
 class DataSource;
 class HistoryManager;
 enum class HistoryPeriod;
@@ -49,6 +50,7 @@ private:
     QLabel* m_debit = nullptr;
     QLabel* m_entrees = nullptr;
     QLabel* m_sorties = nullptr;
+    AbSystemWidget* m_abSystem = nullptr;
     QLabel* m_infos = nullptr;
     QLabel* m_anticipation = nullptr;
     QLabel* m_tendance = nullptr;
