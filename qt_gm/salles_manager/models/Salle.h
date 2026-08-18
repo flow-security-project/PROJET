@@ -43,6 +43,9 @@ struct Salle
     double intrusionDureeS = 0.0;
     QString lcdLigne1;
     QString lcdLigne2;
+    QString ledCouleur = QStringLiteral("eteint");
+    QString ledCouleurConfirmee = QStringLiteral("eteint");
+    QString ledMode = QStringLiteral("normal");
 
     QString decisionFlux;          // "normal" | "attente" | "redirection"
     QString redirectionVers;       // porte de destination en UNI
@@ -190,5 +193,71 @@ struct Salle
         if (intrusionActive)
             return QStringLiteral("INTRUSION ACTIVE");
         return QStringLiteral("EN LIGNE");
+    }
+
+    QString couleurLed() const
+    {
+        if (enAttente || !enLigne)
+            return QStringLiteral("eteint");
+        if (evacuationActive || intrusionActive)
+            return QStringLiteral("rouge");
+
+        const double t = taux();
+        if (t >= 0.95)
+            return QStringLiteral("rouge");
+        if (t >= 0.80)
+            return QStringLiteral("orange");
+        if (t >= 0.60)
+            return QStringLiteral("jaune");
+        return QStringLiteral("vert");
+    }
+
+    struct ChangementAffichage
+    {
+        bool ledChanged = false;
+        bool lcdChanged = false;
+    };
+
+    ChangementAffichage majAffichageLedLcd()
+    {
+        ChangementAffichage res;
+
+        // LED
+        const QString targetLed = couleurLed();
+        const QString targetMode = (evacuationActive) ? QStringLiteral("stroboscope") : QStringLiteral("normal");
+        if (targetLed != ledCouleur || targetMode != ledMode) {
+            ledCouleur = targetLed;
+            ledMode = targetMode;
+            res.ledChanged = true;
+        }
+
+        // LCD
+        QString l1, l2;
+        if (enAttente) {
+            l1 = QStringLiteral("%1  ATTENTE").arg(id);
+            l2 = QStringLiteral("ATTENTE CONFIRM.");
+        } else if (!enLigne) {
+            l1 = QStringLiteral("%1  HORS LIGNE").arg(id);
+            l2 = QStringLiteral("CONNEXION...");
+        } else if (evacuationActive) {
+            l1 = QStringLiteral("EVACUATION ->");
+            l2 = QStringLiteral("SORTEZ PAR LA PO");
+        } else if (intrusionActive) {
+            l1 = QStringLiteral("%1 %2/%3").arg(id).arg(qMax(0, occupation)).arg(capacite);
+            l2 = QStringLiteral("INTRUSION DETECT");
+        } else {
+            l1 = QStringLiteral("%1 %2/%3").arg(id).arg(qMax(0, occupation)).arg(capacite);
+            l2 = QStringLiteral("OK %1-%2").arg(horaireDebut).arg(horaireFin);
+        }
+        l1 = l1.left(16).leftJustified(16, ' ');
+        l2 = l2.left(16).leftJustified(16, ' ');
+
+        if (l1 != lcdLigne1 || l2 != lcdLigne2) {
+            lcdLigne1 = l1;
+            lcdLigne2 = l2;
+            res.lcdChanged = true;
+        }
+
+        return res;
     }
 };

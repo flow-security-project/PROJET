@@ -11,6 +11,7 @@ class HistoryManager;
 enum class HistoryPeriod;
 class IntegratedPlotWidget;
 class JaugeSaturation;
+class LedLcdWidget;
 class QLabel;
 class QListWidget;
 
@@ -51,6 +52,7 @@ private:
     QLabel* m_entrees = nullptr;
     QLabel* m_sorties = nullptr;
     AbSystemWidget* m_abSystem = nullptr;
+    LedLcdWidget* m_ledLcd = nullptr;
     QLabel* m_infos = nullptr;
     QLabel* m_anticipation = nullptr;
     QLabel* m_tendance = nullptr;

@@ -42,6 +42,7 @@ private slots:
 private:
     void publierConfiguration(const Salle& salle);
     void publierDecisionFlux(const Salle& salle);
+    void publierAffichage(const QString& salleId);
     void finaliserMesure(bool succes, const QString& note);
     void preparerDensite(const QString& salleId);
     void preparerSecurite(const QString& salleId);

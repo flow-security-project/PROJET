@@ -239,6 +239,21 @@ void DemoSource::onTick()
         simulerTof(s, QDateTime::currentMSecsSinceEpoch());
         s.mettreAJourAnticipation();
         s.pushHistorique();
+
+        const Salle::ChangementAffichage changement = s.majAffichageLedLcd();
+        if (changement.ledChanged) {
+            s.ledCouleurConfirmee = s.ledCouleur; // rétroaction simulée
+            emit logAppend(QStringLiteral("LED démo — %1 : %2%3")
+                               .arg(s.id, s.ledCouleur,
+                                    s.ledMode == QStringLiteral("stroboscope")
+                                        ? QStringLiteral(" (stroboscope)")
+                                        : QString()));
+        }
+        if (changement.lcdChanged) {
+            emit logAppend(QStringLiteral("LCD démo — %1 : [%2]/[%3]")
+                               .arg(s.id, s.lcdLigne1, s.lcdLigne2));
+        }
+
         emit salleMiseAJour(s.id);
     }
     majDecisionsFlux();

@@ -62,19 +62,17 @@ SallesWidget::SallesWidget(QWidget* parent)
     scroll->setWidget(m_grid);
     leftLayout->addWidget(scroll, 1);
 
+    // Trois panneaux côte à côte : grille | configuration | alertes
+    // (l'historique des alertes gagne toute la hauteur au lieu d'être
+    // écrasé en bas de fenêtre).
     auto* splitter = new QSplitter(Qt::Horizontal, this);
     splitter->addWidget(left);
     splitter->addWidget(m_config);
+    splitter->addWidget(m_panelAlertes);
     splitter->setStretchFactor(0, 3);
-    splitter->setStretchFactor(1, 1);
-    splitter->setSizes({760, 360});
-
-    auto* splitterVertical = new QSplitter(Qt::Vertical, this);
-    splitterVertical->addWidget(splitter);
-    splitterVertical->addWidget(m_panelAlertes);
-    splitterVertical->setStretchFactor(0, 4);
-    splitterVertical->setStretchFactor(1, 1);
-    splitterVertical->setSizes({560, 190});
+    splitter->setStretchFactor(1, 2);
+    splitter->setStretchFactor(2, 2);
+    splitter->setSizes({500, 400, 350});
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(10, 8, 10, 10);
@@ -97,7 +95,7 @@ SallesWidget::SallesWidget(QWidget* parent)
     header->addWidget(m_boutonDemoRapide);
 
     layout->addLayout(header);
-    layout->addWidget(splitterVertical, 1);
+    layout->addWidget(splitter, 1);
 
     connect(m_grid, &SalleGrid::salleSelectionnee,
             this, &SallesWidget::onSalleSelectionnee);
@@ -366,7 +364,7 @@ void SallesWidget::onCourbeDemandee(const Salle& salle)
     m_detailDialog->setAttribute(Qt::WA_DeleteOnClose);
     m_detailDialog->setWindowTitle(QStringLiteral("Détail salle — %1")
                                        .arg(salle.nom.isEmpty() ? salle.id : salle.nom));
-    m_detailDialog->resize(980, 700);
+    m_detailDialog->resize(1320, 720);
 
     auto* detail = new SalleDetailWidget(m_source, salle.id, m_modeleAlertes,
                                           m_history, m_detailDialog);

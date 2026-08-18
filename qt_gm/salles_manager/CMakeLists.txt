@@ -48,6 +48,8 @@ qt_add_executable(salles_manager
     ui/IntegratedPlotWidget.cpp
     ui/AbSystemWidget.h
     ui/AbSystemWidget.cpp
+    ui/LedLcdWidget.h
+    ui/LedLcdWidget.cpp
     ui/JaugeSaturation.h
     ui/JaugeSaturation.cpp
     ui/SalleDetailWidget.h

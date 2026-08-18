@@ -23,6 +23,7 @@
 #include "ui/AbSystemWidget.h"
 #include "ui/IntegratedPlotWidget.h"
 #include "ui/JaugeSaturation.h"
+#include "ui/LedLcdWidget.h"
 
 namespace {
 QLabel* kpiLabel(const QString& title, QWidget* parent)
@@ -87,6 +88,8 @@ SalleDetailWidget::SalleDetailWidget(DataSource* source, const QString& salleId,
 
     m_abSystem = new AbSystemWidget(this);
 
+    m_ledLcd = new LedLcdWidget(this);
+
     m_alerteFlux = new QLabel(QStringLiteral("FLUX SORTIE ANORMAL — sortie brusque détectée"), this);
     m_alerteFlux->setObjectName(QStringLiteral("alerteFluxBadge"));
     m_alerteFlux->setVisible(false);
@@ -145,7 +148,8 @@ SalleDetailWidget::SalleDetailWidget(DataSource* source, const QString& salleId,
     anticipationLayout->addWidget(m_jauge);
     anticipationLayout->addLayout(metaRow);
 
-    auto* controls = new QHBoxLayout;
+    auto* controls = new QGridLayout;
+    controls->setSpacing(8);
     auto* occupation = new QCheckBox(QStringLiteral("Occupation (#4A90D9)"), this);
     auto* entrees = new QCheckBox(QStringLiteral("Entrées (#2E7D32)"), this);
     auto* sorties = new QCheckBox(QStringLiteral("Sorties (#F57C00)"), this);
@@ -158,16 +162,17 @@ SalleDetailWidget::SalleDetailWidget(DataSource* source, const QString& salleId,
     entrees->setChecked(true);
     sorties->setChecked(true);
     densite->setChecked(true);
-    controls->addWidget(occupation);
-    controls->addWidget(entrees);
-    controls->addWidget(sorties);
-    controls->addWidget(densite);
-    controls->addStretch();
+    controls->addWidget(occupation, 0, 0);
+    controls->addWidget(entrees, 0, 1);
+    controls->addWidget(sorties, 1, 0);
+    controls->addWidget(densite, 1, 1);
+    controls->setColumnStretch(3, 1);
     auto* pause = new QPushButton(QStringLiteral("Pause direct"), this);
-    controls->addWidget(pause);
+    controls->addWidget(pause, 0, 2, 2, 1, Qt::AlignVCenter);
 
     m_plot = new IntegratedPlotWidget(this);
     m_plot->setObjectName(QStringLiteral("plotCard"));
+    m_plot->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     connect(occupation, &QCheckBox::toggled, m_plot,
             [this](bool visible) { m_plot->setGraphVisible(0, visible); });
     connect(entrees, &QCheckBox::toggled, m_plot,
@@ -223,16 +228,36 @@ SalleDetailWidget::SalleDetailWidget(DataSource* source, const QString& salleId,
     layout->setSpacing(8);
     layout->addLayout(heading);
     layout->addLayout(kpis);
-    layout->addWidget(m_infos);
-    layout->addWidget(m_abSystem);
-    layout->addWidget(m_alerteFlux);
-    layout->addWidget(m_alerteIntrusion);
-    layout->addWidget(anticipationBox);
-    layout->addLayout(controls);
-    layout->addLayout(historiqueControls);
-    layout->addWidget(m_historiqueResume);
-    layout->addWidget(m_plot, 1);
-    layout->addWidget(alerteBox);
+
+    // Corps en deux colonnes côte à côte : données/équipements à gauche,
+    // courbe et contrôles à droite (la courbe reste visible en hauteur).
+    auto* corps = new QHBoxLayout;
+    corps->setSpacing(10);
+
+    auto* colonneGaucheWidget = new QWidget(this);
+    colonneGaucheWidget->setFixedWidth(680);
+    auto* colonneGauche = new QVBoxLayout(colonneGaucheWidget);
+    colonneGauche->setContentsMargins(0, 0, 0, 0);
+    colonneGauche->setSpacing(8);
+    colonneGauche->addWidget(m_infos);
+    colonneGauche->addWidget(m_abSystem);
+    colonneGauche->addWidget(m_ledLcd);
+    colonneGauche->addWidget(m_alerteFlux);
+    colonneGauche->addWidget(m_alerteIntrusion);
+    colonneGauche->addWidget(anticipationBox);
+    colonneGauche->addWidget(alerteBox);
+    colonneGauche->addStretch();
+    corps->addWidget(colonneGaucheWidget);
+
+    auto* colonneDroite = new QVBoxLayout;
+    colonneDroite->setSpacing(8);
+    colonneDroite->addLayout(controls);
+    colonneDroite->addLayout(historiqueControls);
+    colonneDroite->addWidget(m_historiqueResume);
+    colonneDroite->addWidget(m_plot, 1);
+    corps->addLayout(colonneDroite, 1);
+
+    layout->addLayout(corps, 1);
 
     connect(m_source, &DataSource::salleMiseAJour,
             this, &SalleDetailWidget::onSalleMiseAJour);
@@ -497,6 +522,9 @@ void SalleDetailWidget::afficher(const Salle& salle)
                      ? QString::number(salle.nbPersonnesEstime)
                      : QStringLiteral("—"))
             .arg(salle.regime));
+
+    m_ledLcd->setAffichage(salle.ledCouleur, salle.ledCouleurConfirmee, salle.ledMode,
+                           salle.lcdLigne1, salle.lcdLigne2, salle.enLigne, salle.enAttente);
 
     const bool horsLigne = !salle.enLigne && !salle.enAttente;
     if (horsLigne || salle.occupation < 0) {

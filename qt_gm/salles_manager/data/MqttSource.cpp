@@ -209,6 +209,8 @@ void MqttSource::onMqttState(MqttClient::State state)
         m_client.subscribe(QStringLiteral("salle/+/heartbeat"));
         m_client.subscribe(QStringLiteral("salle/+/etat"));
         m_client.subscribe(QStringLiteral("salle/+/config/confirm"));
+        m_client.subscribe(QStringLiteral("salle/+/led/etat"));
+        m_client.subscribe(QStringLiteral("salle/+/lcd/etat"));
         emit statutSource(true, QStringLiteral("Connecté"));
         emit logAppend(QStringLiteral("MQTT connecté — abonnements salle/+/... actifs"));
         for (const Salle& salle : m_salles) {
@@ -295,7 +297,18 @@ void MqttSource::onMessage(const QString& topic, const QByteArray& payload)
         salle.enAttente = false;
         salle.mettreAJourAnticipation();
         salle.pushHistorique();
-    } else     if (suffix == QStringLiteral("config/confirm")) {
+        publierAffichage(id);
+    } else if (suffix == QStringLiteral("led/etat")) {
+        salle.ledCouleurConfirmee = object.value(QStringLiteral("couleur"))
+                                        .toString(salle.ledCouleurConfirmee);
+        salle.ledMode = object.value(QStringLiteral("mode"))
+                            .toString(salle.ledMode);
+    } else if (suffix == QStringLiteral("lcd/etat")) {
+        salle.lcdLigne1 = object.value(QStringLiteral("ligne1"))
+                              .toString(salle.lcdLigne1);
+        salle.lcdLigne2 = object.value(QStringLiteral("ligne2"))
+                              .toString(salle.lcdLigne2);
+    } else if (suffix == QStringLiteral("config/confirm")) {
         salle.nom = object.value(QStringLiteral("nom")).toString(salle.nom);
         salle.capacite = object.value(QStringLiteral("capacite")).toInt(salle.capacite);
         const QJsonObject horaires = object.value(QStringLiteral("horaires")).toObject();
@@ -313,6 +326,7 @@ void MqttSource::onMessage(const QString& topic, const QByteArray& payload)
                 m_densite[id]->setHauteurPorteCm(salle.hauteurPorteCm);
         }
         salle.enAttente = false;
+        publierAffichage(id);
     } else {
         return;
     }
@@ -335,6 +349,8 @@ void MqttSource::onWatchdogTimeout()
         Salle& salle = it.value();
         if (salle.enAttente)
             continue;
+
+        publierAffichage(salle.id);
 
         if (salle.enLigne && salle.dernierHeartbeatMs > 0
             && maintenant - salle.dernierHeartbeatMs > 30000) {
@@ -384,6 +400,42 @@ void MqttSource::publierDecisionFlux(const Salle& salle)
         return;
     }
     emit logAppend(QStringLiteral("DÉCISION FLUX envoyée — %1").arg(topic));
+}
+
+void MqttSource::publierAffichage(const QString& salleId)
+{
+    if (!m_salles.contains(salleId))
+        return;
+
+    Salle& salle = m_salles[salleId];
+    const Salle::ChangementAffichage changement = salle.majAffichageLedLcd();
+    if (!changement.ledChanged && !changement.lcdChanged)
+        return;
+
+    if (changement.ledChanged) {
+        QJsonObject ledPayload;
+        ledPayload.insert(QStringLiteral("couleur"), salle.ledCouleur);
+        ledPayload.insert(QStringLiteral("luminosite"), 80);
+        const QString topic = QStringLiteral("salle/%1/led/set").arg(salleId);
+        if (!m_client.publish(topic, QJsonDocument(ledPayload).toJson(QJsonDocument::Compact)))
+            emit logAppend(QStringLiteral("LED en attente — broker déconnecté : %1").arg(topic));
+        else
+            emit logAppend(QStringLiteral("LED publiée — %1 : %2").arg(topic, salle.ledCouleur));
+    }
+
+    if (changement.lcdChanged) {
+        QJsonObject lcdPayload;
+        lcdPayload.insert(QStringLiteral("ligne1"), salle.lcdLigne1);
+        lcdPayload.insert(QStringLiteral("ligne2"), salle.lcdLigne2);
+        const QString topic = QStringLiteral("salle/%1/lcd/set").arg(salleId);
+        if (!m_client.publish(topic, QJsonDocument(lcdPayload).toJson(QJsonDocument::Compact)))
+            emit logAppend(QStringLiteral("LCD en attente — broker déconnecté : %1").arg(topic));
+        else
+            emit logAppend(QStringLiteral("LCD publié — %1 : [%2]/[%3]")
+                               .arg(topic, salle.lcdLigne1, salle.lcdLigne2));
+    }
+
+    emit salleMiseAJour(salleId);
 }
 
 void MqttSource::majDecisionsFlux()

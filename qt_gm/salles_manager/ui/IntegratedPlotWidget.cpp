@@ -11,7 +11,7 @@ IntegratedPlotWidget::IntegratedPlotWidget(QWidget* parent)
 {
     setAttribute(Qt::WA_StyledBackground, true);
     m_plot = new QCustomPlot(this);
-    m_plot->setMinimumHeight(260);
+    m_plot->setMinimumSize(500, 260);
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
