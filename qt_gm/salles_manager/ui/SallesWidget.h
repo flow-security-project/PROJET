@@ -12,11 +12,13 @@ class AlerteModel;
 class AlertePanelWidget;
 class DataSource;
 class HistoryManager;
+class AppelManager;
 class QDialog;
 class QLabel;
 class QPushButton;
 class SalleConfigWidget;
 class SalleGrid;
+class SpeakManager;
 class StadeWidget;
 
 class SallesWidget : public QWidget
@@ -27,6 +29,8 @@ public:
     explicit SallesWidget(QWidget* parent = nullptr);
 
     void setSource(DataSource* source);
+    SpeakManager* speakManager() const { return m_speak; }
+    AppelManager* appelManager() const { return m_appel; }
 
 signals:
     void statutChanged(const QString& texte);
@@ -57,6 +61,7 @@ private slots:
                           bool succes, const QString& note);
     void onPassageValide(const QString& salleId, const QString& direction,
                          qint64 timestampMs);
+    void onAnnonce(const QString& texte);
     void onDemoRapide();
 
 private:
@@ -73,6 +78,8 @@ private:
     SalleConfigWidget* m_config = nullptr;
     AlerteModel* m_modeleAlertes = nullptr;
     AlertePanelWidget* m_panelAlertes = nullptr;
+    SpeakManager* m_speak = nullptr;
+    AppelManager* m_appel = nullptr;
     QLabel* m_status = nullptr;
     QPushButton* m_boutonDemoRapide = nullptr;
     QPointer<QDialog> m_detailDialog;

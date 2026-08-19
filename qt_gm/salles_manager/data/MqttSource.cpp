@@ -12,6 +12,7 @@
 #include "engine/flux/FluxOrchestrator.h"
 #include "engine/passage/PassageDetectorAB.h"
 #include "engine/securite/IntrusionDetector.h"
+#include "engine/securite/BousculadeDetector.h"
 #include "models/Alerte.h"
 
 namespace {
@@ -40,6 +41,7 @@ MqttSource::~MqttSource()
 {
     qDeleteAll(m_densite);
     qDeleteAll(m_intrusion);
+    qDeleteAll(m_bousculade);
     qDeleteAll(m_detecteursPassage);
 }
 
@@ -188,6 +190,8 @@ void MqttSource::publierConfiguration(const Salle& salle)
     payload.insert(QStringLiteral("nom"), salle.nom);
     payload.insert(QStringLiteral("capacite"), salle.capacite);
     payload.insert(QStringLiteral("seuilEvacuation"), salle.seuilEvacuation);
+    payload.insert(QStringLiteral("langue"), salle.langue);
+    payload.insert(QStringLiteral("appelNumero"), salle.appelNumero);
     payload.insert(QStringLiteral("hauteurPorte_cm"), salle.hauteurPorteCm);
     payload.insert(QStringLiteral("horaires"), horaires);
 
@@ -311,6 +315,16 @@ void MqttSource::onMessage(const QString& topic, const QByteArray& payload)
     } else if (suffix == QStringLiteral("config/confirm")) {
         salle.nom = object.value(QStringLiteral("nom")).toString(salle.nom);
         salle.capacite = object.value(QStringLiteral("capacite")).toInt(salle.capacite);
+        if (object.contains(QStringLiteral("langue"))) {
+            const QString langue = object.value(QStringLiteral("langue")).toString();
+            if (langue == QStringLiteral("fr") || langue == QStringLiteral("en"))
+                salle.langue = langue;
+        }
+        if (object.contains(QStringLiteral("appelNumero"))) {
+            const QString num = object.value(QStringLiteral("appelNumero")).toString();
+            if (!num.isEmpty())
+                salle.appelNumero = num;
+        }
         const QJsonObject horaires = object.value(QStringLiteral("horaires")).toObject();
         salle.horaireDebut = horaires.value(QStringLiteral("debut"))
                                  .toString(salle.horaireDebut);
@@ -366,6 +380,7 @@ void MqttSource::onWatchdogTimeout()
             salle.pushHistorique();
             verifierFluxSortie(salle.id);
             verifierIntrusion(salle.id, maintenant);
+            verifierBousculade(salle.id, maintenant);
             if (m_densite.contains(salle.id)) {
                 const DensiteEstimation est
                     = m_densite[salle.id]->estimer(maintenant);
@@ -569,6 +584,11 @@ void MqttSource::preparerSecurite(const QString& salleId)
     const Salle& salle = m_salles.value(salleId);
     detecteur->setHoraires(salle.horaireDebut, salle.horaireFin);
     m_intrusion.insert(salleId, detecteur);
+
+    if (!m_bousculade.contains(salleId)) {
+        auto* bousculade = new BousculadeDetector();
+        m_bousculade.insert(salleId, bousculade);
+    }
 }
 
 void MqttSource::verifierIntrusion(const QString& salleId, qint64 maintenantMs)
@@ -604,6 +624,31 @@ void MqttSource::verifierIntrusion(const QString& salleId, qint64 maintenantMs)
     a.appelCible = QStringLiteral("Agent surveillance");
     emit alerte(a);
     emit logAppend(QStringLiteral("ALERTE F11 — %1 : %2").arg(salle.id, a.detail));
+}
+
+void MqttSource::verifierBousculade(const QString& salleId, qint64 maintenantMs)
+{
+    if (!m_salles.contains(salleId) || !m_bousculade.contains(salleId))
+        return;
+
+    Salle& salle = m_salles[salleId];
+    const BousculadeDetector::Resultat res = m_bousculade[salleId]->verifier(salle, maintenantMs);
+    if (!res.alerte)
+        return;
+
+    Alerte a;
+    a.salleId = salle.id;
+    a.salleNom = salle.nom;
+    a.type = QStringLiteral("bousculade");
+    a.capteurs = {QStringLiteral("HC-SR04"), QStringLiteral("VL53L0X")};
+    a.detail = QStringLiteral(
+        "Risque de bousculade détecté — saturation %1% + flux sortant élevé depuis %2 s")
+                .arg(QString::number(salle.taux() * 100.0, 'f', 0))
+                .arg(int(res.dureeS));
+    a.appelCible = QStringLiteral("Agent surveillance");
+    emit alerte(a);
+    emit logAppend(QStringLiteral("ALERTE BOUSCULADE — %1 : %2")
+                       .arg(salle.id, a.detail));
 }
 
 void MqttSource::preparerPassageAB(const QString& salleId)

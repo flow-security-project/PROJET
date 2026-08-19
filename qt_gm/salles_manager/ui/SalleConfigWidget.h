@@ -54,6 +54,8 @@ private:
     void actualiserModeFlux();
 
     QComboBox* m_choixMode = nullptr;
+    QComboBox* m_choixLangue = nullptr;
+    QLineEdit* m_appelNumero = nullptr;
     QLineEdit* m_id = nullptr;
     QLineEdit* m_nom = nullptr;
     QSpinBox* m_capacite = nullptr;

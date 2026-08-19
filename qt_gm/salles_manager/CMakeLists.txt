@@ -9,6 +9,16 @@ set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Network PrintSupport)
 
+# espeak-ng pour génération WAV TTS (optionnel)
+find_library(ESPEAK_NG_LIB NAMES espeak-ng espeak PATHS /usr/lib/x86_64-linux-gnu /usr/lib /usr/local/lib)
+if(ESPEAK_NG_LIB)
+    message(STATUS "libespeak-ng trouvée: ${ESPEAK_NG_LIB}")
+    add_compile_definitions(HAVE_ESPEAK_NG)
+else()
+    message(WARNING "libespeak-ng non trouvée - génération WAV TTS désactivée (fallback sons Asterisk)")
+    set(ESPEAK_NG_LIB "")
+endif()
+
 qt_add_executable(salles_manager
     main.cpp
     resources.qrc
@@ -26,12 +36,29 @@ qt_add_executable(salles_manager
 
     engine/securite/IntrusionDetector.h
     engine/securite/IntrusionDetector.cpp
+    engine/securite/BousculadeDetector.h
+    engine/securite/BousculadeDetector.cpp
 
     engine/flux/FluxOrchestrator.h
     engine/flux/FluxOrchestrator.cpp
 
     engine/passage/PassageDetectorAB.h
     engine/passage/PassageDetectorAB.cpp
+
+    engine/annonce/AnnonceVocale.h
+    engine/annonce/AnnonceVocale.cpp
+    engine/annonce/SpeakManager.h
+    engine/annonce/SpeakManager.cpp
+
+    engine/appel/MessagesBilingues.h
+    engine/appel/TtsWav.h
+    engine/appel/TtsWav.cpp
+    engine/appel/AriClient.h
+    engine/appel/AriClient.cpp
+    engine/appel/AmiClient.h
+    engine/appel/AmiClient.cpp
+    engine/appel/AppelManager.h
+    engine/appel/AppelManager.cpp
 
     data/DataSource.h
     data/DataSource.cpp
@@ -75,6 +102,10 @@ target_link_libraries(salles_manager PRIVATE
     Qt6::Network
     Qt6::PrintSupport
 )
+
+if(ESPEAK_NG_LIB)
+    target_link_libraries(salles_manager PRIVATE ${ESPEAK_NG_LIB})
+endif()
 
 target_include_directories(salles_manager PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}

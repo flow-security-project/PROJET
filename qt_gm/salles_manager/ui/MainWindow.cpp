@@ -1,15 +1,19 @@
 #include "MainWindow.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QToolBar>
 #include <QVariant>
+#include <QMessageBox>
 
 #include "data/DataSource.h"
 #include "data/DemoSource.h"
 #include "data/MqttSource.h"
+#include "engine/annonce/SpeakManager.h"
+#include "engine/appel/AppelManager.h"
 #include "ui/SallesWidget.h"
 
 MainWindow::MainWindow(QWidget* parent)
@@ -35,6 +39,30 @@ MainWindow::MainWindow(QWidget* parent)
     auto* connectButton = new QPushButton(QStringLiteral("Connecter"), this);
     connectButton->setEnabled(false);
 
+    m_voix = new QCheckBox(QStringLiteral("VOIX"), this);
+    m_voix->setChecked(true);
+    m_voix->setToolTip(QStringLiteral(
+        "Active ou désactive les annonces vocales automatiques "
+        "(évacuation, saturation, redirection UNI, attente MULTI, intrusion, "
+        "flux de sortie anormal, retour à la normale)."));
+    m_testVoix = new QPushButton(QStringLiteral("TEST VOIX"), this);
+    m_testVoix->setToolTip(QStringLiteral(
+        "Lit un message de test pour vérifier la synthèse vocale."));
+
+    m_testAppel = new QPushButton(QStringLiteral("TEST APPEL"), this);
+    m_testAppel->setToolTip(QStringLiteral(
+        "Lance un appel de test vers le numéro configuré (ARI + SIP MESSAGE)."));
+
+    m_langueVoix = new QComboBox(this);
+    m_langueVoix->addItem(QStringLiteral("FRANÇAIS"), QStringLiteral("fr"));
+    m_langueVoix->addItem(QStringLiteral("ENGLISH"), QStringLiteral("en"));
+    m_langueVoix->setToolTip(QStringLiteral(
+        "Langue globale des annonces vocales (défaut pour les nouvelles "
+        "salles, le test et les salles non configurées)."));
+
+    m_asteriskBadge = new QLabel(QStringLiteral("ASTERISK: ⚪"), this);
+    m_asteriskBadge->setToolTip(QStringLiteral("État de la connexion Asterisk (ARI/AMI)"));
+
     auto* toolbar = new QToolBar(this);
     toolbar->setMovable(false);
     toolbar->addWidget(new QLabel(QStringLiteral("Source :"), this));
@@ -44,6 +72,13 @@ MainWindow::MainWindow(QWidget* parent)
     toolbar->addWidget(m_brokerIp);
     toolbar->addWidget(m_brokerPort);
     toolbar->addWidget(connectButton);
+    toolbar->addSeparator();
+    toolbar->addWidget(m_voix);
+    toolbar->addWidget(m_langueVoix);
+    toolbar->addWidget(m_testVoix);
+    toolbar->addSeparator();
+    toolbar->addWidget(m_asteriskBadge);
+    toolbar->addWidget(m_testAppel);
     addToolBar(toolbar);
 
     setCentralWidget(m_salles);
@@ -57,6 +92,36 @@ MainWindow::MainWindow(QWidget* parent)
             this, [connectButton](int index) {
                 connectButton->setEnabled(index == 1);
             });
+    connect(m_voix, &QCheckBox::toggled, this, [this](bool actif) {
+        if (m_salles && m_salles->speakManager())
+            m_salles->speakManager()->setActif(actif);
+    });
+    connect(m_langueVoix, &QComboBox::currentIndexChanged, this, [this](int) {
+        if (m_salles && m_salles->speakManager())
+            m_salles->speakManager()->setLangueGlobale(
+                m_langueVoix->currentData().toString());
+    });
+    connect(m_testVoix, &QPushButton::clicked, this, [this]() {
+        if (m_salles && m_salles->speakManager())
+            m_salles->speakManager()->testVoix();
+    });
+    connect(m_testAppel, &QPushButton::clicked, this, [this]() {
+        if (m_salles && m_salles->appelManager())
+            m_salles->appelManager()->testAppel();
+    });
+
+    // Connexions AppelManager pour mise à jour badge Asterisk
+    if (m_salles && m_salles->appelManager()) {
+        auto* appel = m_salles->appelManager();
+        // On connecte via les signaux publics d'AppelManager
+        connect(appel, &AppelManager::log, this, [this](const QString& msg) {
+            m_asteriskBadge->setText(msg.contains("connecté", Qt::CaseInsensitive)
+                                        ? "ASTERISK: 🟢"
+                                        : msg.contains("déconnecté", Qt::CaseInsensitive)
+                                            ? "ASTERISK: 🔴"
+                                            : "ASTERISK: 🟡");
+        });
+    }
 }
 
 MainWindow::~MainWindow()

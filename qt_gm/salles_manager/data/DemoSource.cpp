@@ -9,6 +9,7 @@
 #include "engine/flux/FluxOrchestrator.h"
 #include "engine/passage/PassageDetectorAB.h"
 #include "engine/securite/IntrusionDetector.h"
+#include "engine/securite/BousculadeDetector.h"
 #include "models/Alerte.h"
 
 DemoSource::DemoSource(QObject* parent)
@@ -22,6 +23,7 @@ DemoSource::~DemoSource()
 {
     qDeleteAll(m_densite);
     qDeleteAll(m_intrusion);
+    qDeleteAll(m_bousculade);
     qDeleteAll(m_detecteursPassage);
 }
 
@@ -66,6 +68,9 @@ void DemoSource::creerSalle(const Salle& salle)
     auto* detecteur = new IntrusionDetector();
     detecteur->setHoraires(s.horaireDebut, s.horaireFin);
     m_intrusion.insert(s.id, detecteur);
+
+    auto* bousculade = new BousculadeDetector();
+    m_bousculade.insert(s.id, bousculade);
 
     preparerPassageAB(s.id);
 
@@ -236,6 +241,7 @@ void DemoSource::onTick()
 
         s.tendance = flux;
         verifierIntrusion(s.id, QDateTime::currentMSecsSinceEpoch());
+        verifierBousculade(s.id, QDateTime::currentMSecsSinceEpoch());
         simulerTof(s, QDateTime::currentMSecsSinceEpoch());
         s.mettreAJourAnticipation();
         s.pushHistorique();
@@ -327,6 +333,31 @@ void DemoSource::verifierIntrusion(const QString& salleId, qint64 maintenantMs)
     a.appelCible = QStringLiteral("Agent surveillance");
     emit alerte(a);
     emit logAppend(QStringLiteral("ALERTE F11 — %1 : %2").arg(s.id, a.detail));
+}
+
+void DemoSource::verifierBousculade(const QString& salleId, qint64 maintenantMs)
+{
+    if (!m_salles.contains(salleId) || !m_bousculade.contains(salleId))
+        return;
+
+    Salle& s = m_salles[salleId];
+    const BousculadeDetector::Resultat res = m_bousculade[salleId]->verifier(s, maintenantMs);
+    if (!res.alerte)
+        return;
+
+    Alerte a;
+    a.salleId = s.id;
+    a.salleNom = s.nom;
+    a.type = QStringLiteral("bousculade");
+    a.capteurs = {QStringLiteral("HC-SR04"), QStringLiteral("VL53L0X")};
+    a.detail = QStringLiteral(
+        "Risque de bousculade détecté — saturation %1% + flux sortant élevé depuis %2 s")
+                .arg(QString::number(s.taux() * 100.0, 'f', 0))
+                .arg(int(res.dureeS));
+    a.appelCible = QStringLiteral("Agent surveillance");
+    emit alerte(a);
+    emit logAppend(QStringLiteral("ALERTE BOUSCULADE — %1 : %2")
+                       .arg(s.id, a.detail));
 }
 
 void DemoSource::preparerPassageAB(const QString& salleId)

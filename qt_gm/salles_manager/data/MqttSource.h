@@ -9,6 +9,7 @@
 class DensiteEstimator;
 class IntrusionDetector;
 class PassageDetectorAB;
+class BousculadeDetector;
 
 class MqttSource : public DataSource
 {
@@ -49,6 +50,7 @@ private:
     void preparerPassageAB(const QString& salleId);
     void verifierFluxSortie(const QString& salleId);
     void verifierIntrusion(const QString& salleId, qint64 maintenantMs);
+    void verifierBousculade(const QString& salleId, qint64 maintenantMs);
     void majDecisionsFlux();
     void majEtatToF(const QString& salleId, bool bloque, qint64 tMs);
     void declencherB(const QString& salleId, qint64 tMs);
@@ -65,5 +67,6 @@ private:
     QHash<QString, PassageDetectorAB*> m_detecteursPassage;
     QHash<QString, DensiteEstimator*> m_densite;
     QHash<QString, IntrusionDetector*> m_intrusion;
+    QHash<QString, BousculadeDetector*> m_bousculade;
     QHash<QString, QString> m_dernieresCiblesFlux;
 };

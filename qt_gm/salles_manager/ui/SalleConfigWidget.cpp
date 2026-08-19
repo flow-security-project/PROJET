@@ -31,6 +31,18 @@ SalleConfigWidget::SalleConfigWidget(QWidget* parent)
     m_choixMode->addItem(QStringLiteral("Stade de portails (UNI-MARKET)"),
                          static_cast<int>(ModeFlux::Uni));
 
+    m_choixLangue = new QComboBox(this);
+    m_choixLangue->addItem(QStringLiteral("Français"),
+                           QStringLiteral("fr"));
+    m_choixLangue->addItem(QStringLiteral("English"),
+                           QStringLiteral("en"));
+
+    m_appelNumero = new QLineEdit(this);
+    m_appelNumero->setPlaceholderText(QStringLiteral("Ex: 1001 (vide = défaut global)"));
+    m_appelNumero->setToolTip(QStringLiteral(
+        "Numéro SIP à appeler en cas d'alerte intrusion/bousculade. "
+        "Laissé vide pour utiliser le numéro global par défaut."));
+
     m_id = new QLineEdit(this);
     m_id->setPlaceholderText(QStringLiteral("Ex. B204"));
     m_nom = new QLineEdit(this);
@@ -66,6 +78,8 @@ SalleConfigWidget::SalleConfigWidget(QWidget* parent)
     auto* form = new QFormLayout;
     form->setLabelAlignment(Qt::AlignRight);
     form->addRow(QStringLiteral("Mode de flux"), m_choixMode);
+    form->addRow(QStringLiteral("Langue des annonces"), m_choixLangue);
+    form->addRow(QStringLiteral("Numéro d'appel (SIP)"), m_appelNumero);
     form->addRow(QStringLiteral("Identifiant"), m_id);
     form->addRow(QStringLiteral("Nom"), m_nom);
     form->addRow(QStringLiteral("Capacité"), m_capacite);
@@ -213,6 +227,8 @@ void SalleConfigWidget::afficherCreation()
     m_groupeVerrouille.clear();
     m_groupeBadge->hide();
     m_choixMode->setCurrentIndex(0);
+    m_choixLangue->setCurrentIndex(0);
+    m_appelNumero->clear();
     m_id->clear();
     m_id->setReadOnly(false);
     m_nom->clear();
@@ -248,6 +264,10 @@ void SalleConfigWidget::afficherSalle(const Salle& salle)
     m_nom->setText(salle.nom);
     m_capacite->setValue(salle.capacite);
     m_seuilEvacuation->setValue(salle.seuilEvacuation);
+    m_choixLangue->setCurrentIndex(m_choixLangue->findData(salle.langue) >= 0
+                                       ? m_choixLangue->findData(salle.langue)
+                                       : 0);
+    m_appelNumero->setText(salle.appelNumero);
     m_debut->setTime(QTime::fromString(salle.horaireDebut, QStringLiteral("hh:mm")));
     m_fin->setTime(QTime::fromString(salle.horaireFin, QStringLiteral("hh:mm")));
     m_hauteurCm = salle.hauteurPorteCm;
@@ -368,6 +388,8 @@ Salle SalleConfigWidget::lireFormulaire() const
     salle.nom = m_nom->text().trimmed();
     salle.capacite = m_capacite->value();
     salle.seuilEvacuation = m_seuilEvacuation->value();
+    salle.langue = m_choixLangue->currentData().toString();
+    salle.appelNumero = m_appelNumero->text().trimmed();
     salle.horaireDebut = m_debut->time().toString(QStringLiteral("hh:mm"));
     salle.horaireFin = m_fin->time().toString(QStringLiteral("hh:mm"));
     salle.hauteurPorteCm = m_hauteurCm;
@@ -409,6 +431,8 @@ void SalleConfigWidget::actualiserModeFlux()
     const bool creationStade = stade && m_groupeVerrouille.isEmpty();
     const bool champsSalle = !creationStade;
     m_form->setRowVisible(m_capacite, champsSalle);
+    m_form->setRowVisible(m_choixLangue, champsSalle);
+    m_form->setRowVisible(m_appelNumero, champsSalle);
     m_form->setRowVisible(m_seuilEvacuation, champsSalle);
     m_form->setRowVisible(m_seuilEcart, creationStade);
     m_form->setRowVisible(m_debut, champsSalle);

@@ -20,6 +20,8 @@ struct Salle
     QString horaireDebut = "07:00";
     QString horaireFin = "22:00";
     int seuilEvacuation = 95;
+    QString langue = "fr";   // langue des annonces vocales : "fr" | "en"
+    QString appelNumero = "";   // numéro SIP à appeler en cas d'alerte (ex: "1001"), vide = défaut global
 
     double hauteurPorteCm = -1.0;
     bool hauteurPorteMesuree = false;

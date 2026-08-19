@@ -1,10 +1,12 @@
 #include <QCoreApplication>
+#include <QDate>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QTemporaryDir>
 #include <QTextStream>
+#include <QTimeZone>
 #include <QElapsedTimer>
 
 #include "history/HistoryManager.h"

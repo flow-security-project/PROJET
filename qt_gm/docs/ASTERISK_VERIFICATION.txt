@@ -1,0 +1,87 @@
+=====================================================================
+ i++ v4.0 — VÉRIFICATION ASTERISK APRÈS CORRECTION ARI.CONF
+=====================================================================
+
+Exécutez ces commandes dans l'ordre (avec sudo) et notez les résultats :
+
+=====================================================================
+ÉTAPE 1 — CORRECTION ARI.CONF
+=====================================================================
+sudo sed -i '/^\s*read = all$/d; /^\s*write = all$/d' /etc/asterisk/ari.conf
+
+# Vérifier le résultat (doit afficher [supervision] SANS read/write) :
+cat /etc/asterisk/ari.conf | sed -n '70,85p'
+
+=====================================================================
+ÉTAPE 2 — REDÉMARRAGE ASTERISK
+=====================================================================
+sudo systemctl restart asterisk
+
+# Attendre 3 secondes puis vérifier :
+sleep 3
+pgrep -a asterisk
+
+# Résultat attendu : une ligne avec "/usr/sbin/asterisk"
+# Si rien ne s'affiche : le service n'a pas démarré
+
+=====================================================================
+ÉTAPE 3 — PORT HTTP/ARI (8088)
+=====================================================================
+sudo ss -tlnp | grep 8088
+
+# Résultat attendu : une ligne type "LISTEN 0 100 127.0.0.1:8088 ... asterisk"
+# Si aucune ligne : HTTP/ARI ne tourne pas
+
+=====================================================================
+ÉTAPE 4 — TEST AUTHENTIFICATION ARI (CRITIQUE)
+=====================================================================
+curl -s -u supervision:i_plus_plus http://127.0.0.1:8088/ari/asterisk/info | head -c 300
+echo
+
+# Résultat attendu : JSON commençant par {"version":...} ou {"system":...}
+# ÉCHEC si : "Authentication required" ou erreur de connexion
+
+=====================================================================
+ÉTAPE 5 — LISTE APPLICATIONS STARIS (optionnel)
+=====================================================================
+curl -s -u supervision:i_plus_plus http://127.0.0.1:8088/ari/applications
+echo
+
+# Résultat attendu : [] (liste vide = OK, pas d'erreur auth)
+
+=====================================================================
+ÉTAPE 6 — TEST AMI (pour SIP MESSAGE)
+=====================================================================
+sudo asterisk -rx "manager show users"
+
+# Résultat attendu : une ligne contenant "supervision"
+# Si rien : AMI non activé ou utilisateur manquant
+
+=====================================================================
+ÉTAPE 7 — SOFTPHONE ENREGISTRÉ SUR 1001 (pour test réel)
+=====================================================================
+sudo asterisk -rx "pjsip show contacts"
+
+# Résultat attendu : un contact avec "1001" et "Avail"
+# Si vide : enregistrer un softphone (Linphone/Zoiper/MicroSIP) avec :
+#   Serveur : IP_DE_CETTE_MACHINE  Port : 5060
+#   User : 1001  Pass : PassWord1001!
+#   (voir /etc/asterisk/pjsip.conf)
+
+=====================================================================
+TABLEAU DE VALIDATION FINAL
+=====================================================================
+Copiez-collez ce tableau et cochez ✅ ou ❌ pour chaque point :
+
+[ ] 1. pgrep -a asterisk     → processus asterisk visible
+[ ] 2. ss -tlnp | grep 8088  → port 8088 en écoute
+[ ] 3. curl ARI /info        → JSON reçu (pas "Authentication required")
+[ ] 4. curl ARI /applications → réponse sans erreur auth
+[ ] 5. manager show users    → "supervision" visible
+[ ] 6. pjsip show contacts   → 1001 Avail (ou au moins endpoint configuré)
+
+=====================================================================
+SI TOUT EST ✅ → Je code le module d'appels (engine/appel/)
+SI UN POINT ❌ → On corrige avant de continuer
+
+=====================================================================

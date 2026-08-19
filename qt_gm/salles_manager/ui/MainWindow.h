@@ -5,7 +5,10 @@
 #include <QMainWindow>
 
 class QComboBox;
+class QCheckBox;
 class QLineEdit;
+class QPushButton;
+class QLabel;
 class MqttSource;
 class DemoSource;
 class SallesWidget;
@@ -30,6 +33,11 @@ private:
     QComboBox* m_sourceBox = nullptr;
     QLineEdit* m_brokerIp = nullptr;
     QLineEdit* m_brokerPort = nullptr;
+    QCheckBox* m_voix = nullptr;
+    QComboBox* m_langueVoix = nullptr;
+    QPushButton* m_testVoix = nullptr;
+    QPushButton* m_testAppel = nullptr;
+    QLabel* m_asteriskBadge = nullptr;
     SallesWidget* m_salles = nullptr;
     DemoSource* m_demo = nullptr;
     MqttSource* m_mqtt = nullptr;

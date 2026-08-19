@@ -1,0 +1,137 @@
+=====================================================================
+ i++ v4.0 — CONFIGURATION SERVEUR ASTERISK (APPELS AUTOMATIQUES + MESSAGE)
+=====================================================================
+
+Objet : activer les interfaces HTTP/ARI (appels) et AMI (SIP MESSAGE)
+sur le serveur Asterisk 22.10.1 déjà installé et actif.
+
+À exécuter UNE FOIS, en root (sudo). Durée : ~5 minutes.
+
+Audit effectué le 18/08/2026 :
+  - Asterisk 22.10.1 installé et actif (service systemd).
+  - Endpoints SIP 1001-1004 déjà configurés (pjsip.conf, contexte mes-amis).
+  - ARI : enabled=yes mais AUCUN utilisateur défini + HTTP non activé.
+  - AMI : enabled=no.
+  - libespeak-ng.so.1 installée et fonctionnelle (génération WAV FR/EN,
+    AUCUN paquet supplémentaire à installer).
+  - format_wav.so présent dans /usr/lib/asterisk/modules/ (playback WAV OK).
+
+---------------------------------------------------------------------
+ÉTAPE 0 — SAUVEGARDE (recommandé)
+---------------------------------------------------------------------
+    sudo cp /etc/asterisk/http.conf    /etc/asterisk/http.conf.bak
+    sudo cp /etc/asterisk/ari.conf     /etc/asterisk/ari.conf.bak
+    sudo cp /etc/asterisk/manager.conf /etc/asterisk/manager.conf.bak
+
+---------------------------------------------------------------------
+ÉTAPE 1 — ACTIVER LE SERVEUR HTTP (nécessaire pour ARI)
+---------------------------------------------------------------------
+    sudo nano /etc/asterisk/http.conf
+
+Dans la section [general], modifier ou décommenter ces 3 lignes :
+
+    enabled=yes
+    bindaddr=127.0.0.1
+    bindport=8088
+
+(si la ligne "bindaddr=127.0.0.1" existe déjà commentée, la décommenter ;
+ garder 127.0.0.1 pour la sécurité : accès local uniquement)
+
+Enregistrer (Ctrl+O, Entrée, Ctrl+X).
+
+---------------------------------------------------------------------
+ÉTAPE 2 — CRÉER L'UTILISATEUR ARI (API d'appels)
+---------------------------------------------------------------------
+    sudo nano /etc/asterisk/ari.conf
+
+En FIN de fichier, ajouter ce bloc (remplacer MOT_DE_PASSE_ARI par
+votre mot de passe, ex. "ip4plus2026!") :
+
+    [supervision]
+    type = user
+    password = MOT_DE_PASSE_ARI
+    password_format = plain
+    read = all
+    write = all
+
+Enregistrer (Ctrl+O, Entrée, Ctrl+X).
+
+---------------------------------------------------------------------
+ÉTAPE 3 — ACTIVER L'AMI + UTILISATEUR (envoi du SIP MESSAGE)
+---------------------------------------------------------------------
+    sudo nano /etc/asterisk/manager.conf
+
+1) Dans la section [general], changer :
+
+    enabled = no        -->     enabled = yes
+
+2) En FIN de fichier, ajouter (même mot de passe que l'étape 2) :
+
+    [supervision]
+    secret = MOT_DE_PASSE_ARI
+    read = all
+    write = all
+
+Enregistrer (Ctrl+O, Entrée, Ctrl+X).
+
+---------------------------------------------------------------------
+ÉTAPE 4 — REDÉMARRER ASTERISK (obligatoire pour HTTP/ARI/AMI)
+---------------------------------------------------------------------
+    sudo systemctl restart asterisk
+
+Vérifier que le service est bien actif :
+
+    systemctl status asterisk --no-pager
+
+---------------------------------------------------------------------
+ÉTAPE 5 — PREFLIGHT (vérifications AVANT de coder quoi que ce soit)
+---------------------------------------------------------------------
+Remplacer MOT_DE_PASSE_ARI par votre mot de passe, puis :
+
+  a) Le port HTTP écoute-t-il ?
+       sudo ss -tlnp | grep 8088
+     Résultat attendu : une ligne avec 127.0.0.1:8088 et asterisk
+
+  b) L'API ARI répond-elle (authentification OK) ?
+       curl -s -u supervision:MOT_DE_PASSE_ARI \
+            http://127.0.0.1:8088/ari/asterisk/info | head -c 300
+     Résultat attendu : un JSON {"version": {...}, "system": {...}}
+
+  c) L'application Stasis est-elle créable ? (liste des apps — vide = OK)
+       curl -s -u supervision:MOT_DE_PASSE_ARI \
+            http://127.0.0.1:8088/ari/applications | head -c 300
+     Résultat attendu : []  (une liste vide est NORMALE)
+
+  d) AMI est-il actif ?
+       sudo asterisk -rx "manager show users"
+     Résultat attendu : une ligne contenant "supervision"
+
+  e) Un softphone est-il enregistré sur 1001 ? (test réel des appels)
+       sudo asterisk -rx "pjsip show contacts"
+     Résultat attendu : un contact avec URI sip:1001@... et Status: Avail
+     Si vide : enregistrez un softphone (Linphone/Zoiper/MicroSIP) avec :
+       Serveur : IP_DE_CETTE_MACHINE  Port SIP : 5060
+       Identifiant : 1001   Mot de passe : PassWord1001!
+       (voir /etc/asterisk/pjsip.conf, section [1001])
+
+---------------------------------------------------------------------
+CRITÈRES DE VALIDATION (à me communiquer)
+---------------------------------------------------------------------
+  1. Sortie de "sudo ss -tlnp | grep 8088"
+  2. Sortie du curl ARI (b) — si JSON reçu : interface OK
+  3. Sortie de "manager show users"
+  4. Sortie de "pjsip show contacts" (softphone enregistré ou non)
+
+SI (1)(2)(3) OK  → je code le module d'appels (vertical slice : TEST APPEL).
+SI un point échoue → on s'arrête là, aucun code écrit, on ajuste la config.
+
+---------------------------------------------------------------------
+INFORMATIONS DE SÉCURITÉ
+---------------------------------------------------------------------
+- HTTP/ARI et AMI n'écoutent QUE sur 127.0.0.1 (localhost) :
+  aucune exposition réseau. L'application Qt (même machine) y accède.
+- Le mot de passe est stocké en clair dans ari.conf/manager.conf
+  (format plain) — usage local uniquement, acceptable ici.
+- Pour plus de sécurité plus tard : password_format = crypt
+  (généré via : mkpasswd -m sha-512 "MOT_DE_PASSE")
+=====================================================================

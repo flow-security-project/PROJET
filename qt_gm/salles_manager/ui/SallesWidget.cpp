@@ -13,6 +13,8 @@
 #include <QVBoxLayout>
 
 #include "data/DataSource.h"
+#include "engine/annonce/SpeakManager.h"
+#include "engine/appel/AppelManager.h"
 #include "history/HistoryManager.h"
 #include "models/AlerteModel.h"
 #include "ui/AlertePanelWidget.h"
@@ -36,6 +38,12 @@ SallesWidget::SallesWidget(QWidget* parent)
     m_modeleAlertes = new AlerteModel(this);
     m_modeleAlertes->charger(m_history->alertes());
     m_panelAlertes = new AlertePanelWidget(m_modeleAlertes, m_history, this);
+    m_speak = new SpeakManager(this);
+    m_appel = new AppelManager(this);
+    connect(m_speak, &SpeakManager::annonceEnoncee,
+            this, &SallesWidget::onAnnonce);
+    connect(m_speak, &SpeakManager::annonceFilee,
+            this, &SallesWidget::onAnnonce);
 
     connect(m_modeleAlertes, &AlerteModel::alerteAjoutee, this,
             [this](const Alerte& alerte) { m_history->recordAlerte(alerte); });
@@ -43,6 +51,15 @@ SallesWidget::SallesWidget(QWidget* parent)
             [this](const Alerte& alerte) { m_history->updateAlerte(alerte); });
     connect(m_history, &HistoryManager::storageError, this,
             [this](const QString& message) { emit statutChanged(message); });
+
+    // Connecter AppelManager aux alertes et logs
+    connect(m_appel, &AppelManager::log, this, &SallesWidget::onAnnonce);
+    connect(m_appel, &AppelManager::erreur, this, &SallesWidget::onAnnonce);
+    connect(m_appel, &AppelManager::statutAppelChange, this,
+            [this](const QString&, const QString& channelId, const QString& etat, const QString& ext) {
+                m_status->setText(QTime::currentTime().toString("hh:mm:ss")
+                                  + QStringLiteral("  APPEL: %1 → %2 (%3)").arg(etat, ext, channelId.left(8)));
+            });
 
     auto* left = new QWidget(this);
     left->setObjectName(QStringLiteral("sallesLeft"));
@@ -145,6 +162,8 @@ void SallesWidget::setSource(DataSource* source)
     m_history->resetLive();
     m_grid->viderVue();
     m_config->afficherCreation();
+    m_speak->setSource(source);
+    m_appel->setSource(source);
     if (!m_source) {
         m_boutonDemoRapide->setVisible(false);
         return;
@@ -170,6 +189,10 @@ void SallesWidget::onSalleAjoutee(const QString& id)
         mettreAJourGroupe(salle.groupeId);
     if (id == m_selectionId)
         m_config->afficherSalle(salle);
+    // Sync config d'appel pour cette salle
+    AppelManager::ConfigSalle cfg;
+    cfg.numero = salle.appelNumero;
+    m_appel->setConfigSalle(id, cfg);
     emit statutChanged(QStringLiteral("Salle %1 ajoutée").arg(id));
 }
 
@@ -187,6 +210,10 @@ void SallesWidget::onSalleMiseAJour(const QString& id)
         mettreAJourGroupe(salle.groupeId);
     if (id == m_selectionId)
         m_config->afficherStatutReseau(salle);
+    // Sync config d'appel pour cette salle
+    AppelManager::ConfigSalle cfg;
+    cfg.numero = salle.appelNumero;
+    m_appel->setConfigSalle(id, cfg);
     emit statutChanged(QStringLiteral("Données actualisées — %1").arg(id));
 }
 
@@ -426,6 +453,12 @@ void SallesWidget::onPassageValide(const QString& salleId, const QString& direct
         return;
     m_history->recordPassage(salleId, direction, timestampMs,
                              m_source->salles().value(salleId));
+}
+
+void SallesWidget::onAnnonce(const QString& texte)
+{
+    m_status->setText(QTime::currentTime().toString(QStringLiteral("hh:mm:ss"))
+                      + QStringLiteral("  VOIX — ") + texte);
 }
 
 void SallesWidget::onDemoRapide()
