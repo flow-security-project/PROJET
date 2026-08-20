@@ -6,23 +6,23 @@
 #include <QFontDatabase>
 
 namespace {
-const QColor cFond(0xFF, 0xFF, 0xFF);
-const QColor cBordure(0xE2, 0xE8, 0xF0);
-const QColor cTexte(0x1E, 0x29, 0x3B);
-const QColor cTexteSecondaire(0x64, 0x74, 0x8B);
-const QColor cInactif(0xCB, 0xD5, 0xE1);
+const QColor cFond(0x0E, 0x13, 0x1F);
+const QColor cBordure(0x1E, 0x27, 0x38);
+const QColor cTexte(0xF0, 0xF6, 0xFC);
+const QColor cTexteSecondaire(0x8B, 0x94, 0x9E);
+const QColor cInactif(0x35, 0x45, 0x63);
 
-const QColor cLcdBg(0x0F, 0x17, 0x2A);       // Arrière-plan LCD sombre
-const QColor cLcdTexte(0x22, 0xC5, 0x5E);    // Vert néon LCD #22C55E
-const QColor cLcdBordure(0x33, 0x41, 0x55);  // Bordure LCD
+const QColor cLcdBg(0x08, 0x0B, 0x10);       // Arrière-plan LCD sombre
+const QColor cLcdTexte(0x10, 0xB9, 0x81);    // Vert Émeraude LCD #10B981
+const QColor cLcdBordure(0x21, 0x2B, 0x3E);  // Bordure LCD
 
 QColor colorFromName(const QString& name) {
     if (name == QStringLiteral("rouge")) return QColor(0xEF, 0x44, 0x44);
     if (name == QStringLiteral("vert")) return QColor(0x10, 0xB9, 0x81);
     if (name == QStringLiteral("orange")) return QColor(0xF5, 0x9E, 0x0B);
     if (name == QStringLiteral("jaune")) return QColor(0xD9, 0x77, 0x06);
-    if (name == QStringLiteral("bleu")) return QColor(0x25, 0x63, 0xEB);
-    return QColor(0xCB, 0xD5, 0xE1);
+    if (name == QStringLiteral("bleu")) return QColor(0x10, 0xB9, 0x81);
+    return QColor(0x35, 0x45, 0x63);
 }
 }
 

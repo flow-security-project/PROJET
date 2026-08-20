@@ -21,7 +21,7 @@ static QString severiteHex(const QString& severite)
         return QStringLiteral("#C62828");
     if (severite == QLatin1String("attention"))
         return QStringLiteral("#F57C00");
-    return QStringLiteral("#1E88E5");
+    return QStringLiteral("#10B981");
 }
 
 AlertePanelWidget::AlertePanelWidget(AlerteModel* modele, HistoryManager* history,

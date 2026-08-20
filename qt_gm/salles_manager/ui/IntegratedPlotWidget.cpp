@@ -19,67 +19,68 @@ IntegratedPlotWidget::IntegratedPlotWidget(QWidget* parent)
 
     m_occupation = m_plot->addGraph();
     m_occupation->setName(QStringLiteral("Occupation"));
-    m_occupation->setPen(QPen(QColor("#4A90D9"), 2));
+    m_occupation->setPen(QPen(QColor("#10B981"), 2));
 
     QCPAxis* densiteAxis = m_plot->axisRect(0)->addAxis(QCPAxis::atRight);
     densiteAxis->setVisible(true);
     densiteAxis->setRange(0, 1);
     densiteAxis->setLabel(QStringLiteral("Densité (0-1)"));
-    densiteAxis->setLabelColor(QColor("#7C3AED"));
-    densiteAxis->setTickLabelColor(QColor("#7C3AED"));
-    densiteAxis->setBasePen(QPen(QColor("#7C3AED"), 1));
+    densiteAxis->setLabelColor(QColor("#4ADE80"));
+    densiteAxis->setTickLabelColor(QColor("#4ADE80"));
+    densiteAxis->setBasePen(QPen(QColor("#4ADE80"), 1));
     densiteAxis->grid()->setVisible(false);
     m_densite = m_plot->addGraph(m_plot->xAxis, densiteAxis);
     m_densite->setName(QStringLiteral("Densité"));
-    m_densite->setPen(QPen(QColor("#7C3AED"), 2, Qt::DashLine));
+    m_densite->setPen(QPen(QColor("#4ADE80"), 2, Qt::DashLine));
 
     m_entrees = m_plot->addGraph();
     m_entrees->setName(QStringLiteral("Entrées (cumul)"));
-    m_entrees->setPen(QPen(QColor("#2E7D32"), 2));
+    m_entrees->setPen(QPen(QColor("#10B981"), 2));
 
     m_sorties = m_plot->addGraph();
     m_sorties->setName(QStringLiteral("Sorties (cumul)"));
-    m_sorties->setPen(QPen(QColor("#F57C00"), 2));
+    m_sorties->setPen(QPen(QColor("#F59E0B"), 2));
 
     m_prevision = m_plot->addGraph();
     m_prevision->setName(QStringLiteral("Prévision"));
-    QPen previsionPen(QColor("#DC2626"), 2, Qt::DashLine);
+    QPen previsionPen(QColor("#EF4444"), 2, Qt::DashLine);
     m_prevision->setPen(previsionPen);
 
     m_seuil80 = new QCPItemStraightLine(m_plot);
-    m_seuil80->setPen(QPen(QColor("#F57C00"), 1, Qt::DashLine));
+    m_seuil80->setPen(QPen(QColor("#F59E0B"), 1, Qt::DashLine));
     m_seuil80->point1->setCoords(0, 80);
     m_seuil80->point2->setCoords(1, 80);
 
     m_seuil100 = new QCPItemStraightLine(m_plot);
-    m_seuil100->setPen(QPen(QColor("#C62828"), 1, Qt::DashLine));
+    m_seuil100->setPen(QPen(QColor("#EF4444"), 1, Qt::DashLine));
     m_seuil100->point1->setCoords(0, 100);
     m_seuil100->point2->setCoords(1, 100);
 
     m_repSaturation = new QCPItemText(m_plot);
     m_repSaturation->setText(QStringLiteral("Saturation"));
-    m_repSaturation->setColor(QColor("#DC2626"));
-    m_repSaturation->setPen(QPen(QColor("#DC2626")));
-    m_repSaturation->setBrush(QBrush(QColor(254, 242, 242)));
-    m_repSaturation->setFont(QFont(QStringLiteral("Inter"), 9, QFont::Bold));
+    m_repSaturation->setColor(QColor("#F87171"));
+    m_repSaturation->setPen(QPen(QColor("#EF4444")));
+    m_repSaturation->setBrush(QBrush(QColor(69, 10, 10)));
+    m_repSaturation->setFont(QFont(QStringLiteral("Space Grotesk"), 9, QFont::Bold));
     m_repSaturation->setPadding(QMargins(4, 2, 4, 2));
     m_repSaturation->position->setType(QCPItemPosition::ptPlotCoords);
     m_repSaturation->setVisible(false);
 
-    m_plot->setBackground(QBrush(Qt::transparent));
-    m_plot->axisRect()->setBackground(QBrush(Qt::transparent));
-    m_plot->xAxis->setBasePen(QPen(QColor("#555555"), 1));
-    m_plot->yAxis->setBasePen(QPen(QColor("#555555"), 1));
-    m_plot->xAxis->setTickLabelColor(QColor("#555555"));
-    m_plot->yAxis->setTickLabelColor(QColor("#555555"));
-    m_plot->xAxis->setLabelColor(QColor("#555555"));
-    m_plot->yAxis->setLabelColor(QColor("#555555"));
+    m_plot->setBackground(QBrush(QColor("#080B10")));
+    m_plot->axisRect()->setBackground(QBrush(QColor("#0D1118")));
+    m_plot->xAxis->setBasePen(QPen(QColor("#212B3E"), 1));
+    m_plot->yAxis->setBasePen(QPen(QColor("#212B3E"), 1));
+    m_plot->xAxis->setTickLabelColor(QColor("#8B949E"));
+    m_plot->yAxis->setTickLabelColor(QColor("#8B949E"));
+    m_plot->xAxis->setLabelColor(QColor("#8B949E"));
+    m_plot->yAxis->setLabelColor(QColor("#8B949E"));
     m_plot->xAxis->setLabel(QStringLiteral("Heure"));
     m_plot->yAxis->setLabel(QStringLiteral("Échelle normalisée (%)"));
-    m_plot->xAxis->grid()->setPen(QPen(QColor("#E8E8E8"), 1, Qt::DotLine));
-    m_plot->yAxis->grid()->setPen(QPen(QColor("#E8E8E8"), 1, Qt::DotLine));
+    m_plot->xAxis->grid()->setPen(QPen(QColor("#1A2232"), 1, Qt::DotLine));
+    m_plot->yAxis->grid()->setPen(QPen(QColor("#1A2232"), 1, Qt::DotLine));
 
     QFont font = m_plot->xAxis->tickLabelFont();
+    font.setFamily(QStringLiteral("JetBrains Mono"));
     font.setPointSize(9);
     m_plot->xAxis->setTickLabelFont(font);
     m_plot->yAxis->setTickLabelFont(font);
@@ -92,7 +93,10 @@ IntegratedPlotWidget::IntegratedPlotWidget(QWidget* parent)
     m_plot->xAxis->setTicker(ticker);
     m_plot->yAxis->setRange(0, 105);
     m_plot->legend->setVisible(true);
-    m_plot->legend->setFont(QFont(font.family(), 9));
+    m_plot->legend->setFont(QFont(QStringLiteral("JetBrains Mono"), 8));
+    m_plot->legend->setBrush(QBrush(QColor(14, 19, 31, 220)));
+    m_plot->legend->setBorderPen(QPen(QColor("#212B3E"), 1));
+    m_plot->legend->setTextColor(QColor("#F0F6FC"));
     m_plot->replot();
 }
 

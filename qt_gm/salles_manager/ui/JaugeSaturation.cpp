@@ -63,10 +63,10 @@ void JaugeSaturation::paintEvent(QPaintEvent*)
 
     // Marqueur de la position actuelle
     const int currentX = int(m_taux * double(widthPx));
-    p.setPen(QPen(QColor("#0F172A"), 2));
+    p.setPen(QPen(QColor("#F0F6FC"), 2));
     p.drawLine(QPointF(double(currentX), double(railY - 8)),
                QPointF(double(currentX), double(railY + railH + 4)));
-    p.setBrush(QColor("#0F172A"));
+    p.setBrush(QColor("#F0F6FC"));
     QPainterPath fleche;
     fleche.moveTo(double(currentX) - 4, double(railY - 8));
     fleche.lineTo(double(currentX) + 4, double(railY - 8));
@@ -75,12 +75,10 @@ void JaugeSaturation::paintEvent(QPaintEvent*)
     p.drawPath(fleche);
 
     // Libellés
-    p.setPen(QColor("#64748B"));
-    QFont font = this->font();
-    font.setPointSize(9);
-    font.setBold(true);
+    p.setPen(QColor("#8B949E"));
+    QFont font(QStringLiteral("JetBrains Mono"), 9, QFont::Bold);
     p.setFont(font);
-    const QString actuel = QStringLiteral("Actuel : %1 %")
+    const QString actuel = QStringLiteral("ACTUEL : %1 %")
                                .arg(int(m_taux * 100.0 + 0.5));
     p.drawText(QRect(0, 6, 180, 16), Qt::AlignLeft | Qt::AlignVCenter, actuel);
 

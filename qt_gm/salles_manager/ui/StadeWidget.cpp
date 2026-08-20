@@ -22,7 +22,7 @@ StadeWidget::StadeWidget(DataSource* source, const QString& groupeId, QWidget* p
 {
     setAttribute(Qt::WA_DeleteOnClose);
     setObjectName(QStringLiteral("stadeRoot"));
-    setStyleSheet(QStringLiteral("QDialog#stadeRoot { background: #0F172A; }"));
+    setStyleSheet(QStringLiteral("QDialog#stadeRoot { background: #080B10; }"));
 
     m_titre = new QLabel(this);
     m_titre->setObjectName(QStringLiteral("pageTitle"));

@@ -219,17 +219,13 @@ void SalleGrid::construireCarte(const QString& id)
     footerLayout->addLayout(infoRow1);
     footerLayout->addWidget(hauteur);
 
-    // --- Layout principal de la carte : liseré d'identité + corps ---
-    auto* accent = new QFrame(card);
-    accent->setObjectName(QStringLiteral("cardAccent"));
-    accent->setFixedWidth(8);
-
+    // --- Layout principal de la carte : corps épuré sans liseré vertical ---
     auto* body = new QWidget(card);
     body->setObjectName(QStringLiteral("cardBody"));
 
     auto* layout = new QVBoxLayout(body);
-    layout->setContentsMargins(16, 14, 16, 14);
-    layout->setSpacing(10);
+    layout->setContentsMargins(14, 12, 14, 12);
+    layout->setSpacing(8);
     layout->addLayout(headerLayout);
     layout->addLayout(occLayout);
     layout->addWidget(barre);
@@ -238,10 +234,9 @@ void SalleGrid::construireCarte(const QString& id)
     auto* rootLayout = new QHBoxLayout(card);
     rootLayout->setContentsMargins(0, 0, 0, 0);
     rootLayout->setSpacing(0);
-    rootLayout->addWidget(accent);
     rootLayout->addWidget(body, 1);
 
-    const QList<QWidget*> clickable = {card, accent, body, led, title, identifiant,
+    const QList<QWidget*> clickable = {card, body, led, title, identifiant,
                                        status, occupation, pourcentage, barre,
                                        footer, flux, details, hauteur};
     for (QWidget* widget : clickable) {
@@ -251,7 +246,7 @@ void SalleGrid::construireCarte(const QString& id)
 
     Carte carte;
     carte.widget = card;
-    carte.accent = accent;
+    carte.accent = nullptr;
     carte.led = led;
     carte.titre = title;
     carte.identifiant = identifiant;
@@ -273,33 +268,6 @@ void SalleGrid::mettreAJourCarte(const QString& id)
 
     const Salle& salle = m_salles[id];
     Carte& carte = m_cartes[id];
-
-    QColor base;
-    if (salle.enAttente) {
-        base = QColor(QStringLiteral("#6366F1"));
-    } else if (!salle.enLigne) {
-        base = QColor(QStringLiteral("#94A3B8"));
-    } else if (salle.evacuationActive) {
-        base = QColor(QStringLiteral("#B91C1C"));
-    } else if (salle.intrusionActive) {
-        base = QColor(QStringLiteral("#C62828"));
-    } else {
-        const double t = salle.taux();
-        if (t >= 0.95)
-            base = QColor(QStringLiteral("#DC2626"));
-        else if (t >= 0.80)
-            base = QColor(QStringLiteral("#EF6C00"));
-        else if (t >= 0.60)
-            base = QColor(QStringLiteral("#D97706"));
-        else
-            base = m_themeStade ? QColor(QStringLiteral("#7C3AED"))
-                                : QColor(QStringLiteral("#059669"));
-    }
-    carte.accent->setStyleSheet(
-        QStringLiteral("background:qlineargradient(x1:0, y1:0, x2:0, y2:1, "
-                       "stop:0 %1, stop:1 %2); border:none; "
-                       "border-top-left-radius:8px; border-bottom-left-radius:8px;")
-            .arg(base.lighter(125).name(), base.darker(115).name()));
 
     carte.titre->setText(salle.nom.isEmpty() ? salle.id : salle.nom);
     carte.identifiant->setText(QStringLiteral("[%1]").arg(salle.id));
@@ -450,16 +418,12 @@ void SalleGrid::construireCarteGroupe(const QString& id)
     footerLayout->addLayout(infoRow1);
     footerLayout->addWidget(hauteur);
 
-    auto* accent = new QFrame(card);
-    accent->setObjectName(QStringLiteral("cardAccent"));
-    accent->setFixedWidth(8);
-
     auto* body = new QWidget(card);
     body->setObjectName(QStringLiteral("cardBody"));
 
     auto* layout = new QVBoxLayout(body);
-    layout->setContentsMargins(16, 14, 16, 14);
-    layout->setSpacing(10);
+    layout->setContentsMargins(14, 12, 14, 12);
+    layout->setSpacing(8);
     layout->addLayout(headerLayout);
     layout->addLayout(occLayout);
     layout->addWidget(barre);
@@ -468,10 +432,9 @@ void SalleGrid::construireCarteGroupe(const QString& id)
     auto* rootLayout = new QHBoxLayout(card);
     rootLayout->setContentsMargins(0, 0, 0, 0);
     rootLayout->setSpacing(0);
-    rootLayout->addWidget(accent);
     rootLayout->addWidget(body, 1);
 
-    const QList<QWidget*> clickable = {card, accent, body, led, title, identifiant,
+    const QList<QWidget*> clickable = {card, body, led, title, identifiant,
                                        status, occupation, pourcentage, barre,
                                        footer, flux, details, hauteur};
     for (QWidget* widget : clickable) {
@@ -481,7 +444,7 @@ void SalleGrid::construireCarteGroupe(const QString& id)
 
     Carte carte;
     carte.widget = card;
-    carte.accent = accent;
+    carte.accent = nullptr;
     carte.led = led;
     carte.titre = title;
     carte.identifiant = identifiant;
@@ -503,22 +466,6 @@ void SalleGrid::mettreAJourCarteGroupe(const QString& id)
 
     const GroupeVue& vue = m_groupes[id];
     Carte& carte = m_cartes[id];
-
-    QColor base;
-    if (vue.statut == QStringLiteral("offline")) {
-        base = QColor(QStringLiteral("#94A3B8"));
-    } else if (vue.statut == QStringLiteral("sature")) {
-        base = QColor(QStringLiteral("#DC2626"));
-    } else if (vue.statut == QStringLiteral("attention")) {
-        base = QColor(QStringLiteral("#EF6C00"));
-    } else {
-        base = QColor(QStringLiteral("#059669"));
-    }
-    carte.accent->setStyleSheet(
-        QStringLiteral("background:qlineargradient(x1:0, y1:0, x2:0, y2:1, "
-                       "stop:0 %1, stop:1 %2); border:none; "
-                       "border-top-left-radius:8px; border-bottom-left-radius:8px;")
-            .arg(base.lighter(125).name(), base.darker(115).name()));
 
     carte.titre->setText(QStringLiteral("%1").arg(vue.groupe.nom.isEmpty()
                                                       ? vue.groupe.id

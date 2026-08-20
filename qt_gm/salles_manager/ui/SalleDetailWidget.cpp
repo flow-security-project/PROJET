@@ -150,10 +150,10 @@ SalleDetailWidget::SalleDetailWidget(DataSource* source, const QString& salleId,
 
     auto* controls = new QGridLayout;
     controls->setSpacing(8);
-    auto* occupation = new QCheckBox(QStringLiteral("Occupation (#4A90D9)"), this);
-    auto* entrees = new QCheckBox(QStringLiteral("Entrées (#2E7D32)"), this);
+    auto* occupation = new QCheckBox(QStringLiteral("Occupation (#10B981)"), this);
+    auto* entrees = new QCheckBox(QStringLiteral("Entrées (#10B981)"), this);
     auto* sorties = new QCheckBox(QStringLiteral("Sorties (#F57C00)"), this);
-    auto* densite = new QCheckBox(QStringLiteral("Densité (#7C3AED)"), this);
+    auto* densite = new QCheckBox(QStringLiteral("Densité (#4ADE80)"), this);
     occupation->setObjectName(QStringLiteral("checkOccupation"));
     entrees->setObjectName(QStringLiteral("checkEntrees"));
     sorties->setObjectName(QStringLiteral("checkSorties"));
